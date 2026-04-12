@@ -1,2 +1,7 @@
 media-streaming/config
 home-traefik/letsencrypt
+homepage/config/logs
+homepage/config/custom.css
+homepage/config/custom.js
+homepage/config/kubernetes.yaml
+homepage/config/proxmox.yaml

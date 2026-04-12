@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker network:*)",
+      "Bash(docker exec:*)",
+      "Bash(python3 -m json.tool)",
+      "Bash(docker compose:*)",
+      "WebFetch(domain:gethomepage.dev)",
+      "WebFetch(domain:docs.techdox.nz)"
+    ]
+  }
+}

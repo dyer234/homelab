@@ -11,21 +11,20 @@ services:
       # Redirect HTTP -> HTTPS
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      # Let's Encrypt - DNS-01 via GoDaddy
+      # Let's Encrypt - DNS-01 via DigitalOcean
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=godaddy"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=digitalocean"
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      # Dashboard - secure mode only (no insecure port)
+      # Dashboard
       - "--api.dashboard=true"
       #- "--log.level=DEBUG"
     ports:
       - "80:80"
       - "443:443"
     environment:
-      - GODADDY_API_KEY=${GODADDY_API_KEY}
-      - GODADDY_API_SECRET=${GODADDY_API_SECRET}
+      - DO_AUTH_TOKEN=${DO_AUTH_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
@@ -45,4 +44,4 @@ services:
 
 networks:
   traefik-public:
-    external: true
+    name: traefik-public
