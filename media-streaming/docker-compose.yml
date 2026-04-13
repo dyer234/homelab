@@ -21,7 +21,7 @@ services:
       - "traefik.http.routers.prowlarr.entrypoints=websecure"
       - "traefik.http.routers.prowlarr.tls.certresolver=letsencrypt"
       - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
-      - "homepage.group=Media"
+      - "homepage.group=Find New"
       - "homepage.name=Prowlarr"
       - "homepage.icon=prowlarr.png"
       - "homepage.href=https://prowlarr.${DOMAIN}"
@@ -47,7 +47,7 @@ services:
       - "traefik.http.routers.sonarr.entrypoints=websecure"
       - "traefik.http.routers.sonarr.tls.certresolver=letsencrypt"
       - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
-      - "homepage.group=Media"
+      - "homepage.group=Find New"
       - "homepage.name=Sonarr"
       - "homepage.icon=sonarr.png"
       - "homepage.href=https://sonarr.${DOMAIN}"
@@ -73,7 +73,7 @@ services:
       - "traefik.http.routers.radarr.entrypoints=websecure"
       - "traefik.http.routers.radarr.tls.certresolver=letsencrypt"
       - "traefik.http.services.radarr.loadbalancer.server.port=7878"
-      - "homepage.group=Media"
+      - "homepage.group=Find New"
       - "homepage.name=Radarr"
       - "homepage.icon=radarr.png"
       - "homepage.href=https://radarr.${DOMAIN}"
@@ -104,6 +104,11 @@ services:
       - "homepage.icon=emby.png"
       - "homepage.href=https://emby.${DOMAIN}"
       - "homepage.description=Media Server"
+      - "homepage.widget.type=emby"
+      - "homepage.widget.url=http://emby:8096"
+      - "homepage.widget.key=${EMBY_API_KEY}"
+      - "homepage.widget.enableBlocks=true"
+      - "homepage.widget.enableNowPlaying=true"
     networks:
       - media_net
       - traefik-public
@@ -126,6 +131,8 @@ services:
       - "homepage.icon=qbittorrent.png"
       - "homepage.href=https://qbit.${DOMAIN}"
       - "homepage.description=Torrent Client"
+      - "homepage.widget.type=qbittorrent"
+      - "homepage.widget.url=http://wireguard:8181"
     cap_add:
       - NET_ADMIN
     dns:
@@ -196,7 +203,7 @@ services:
       - "traefik.http.routers.bazarr.entrypoints=websecure"
       - "traefik.http.routers.bazarr.tls.certresolver=letsencrypt"
       - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
-      - "homepage.group=Media"
+      - "homepage.group=Find New"
       - "homepage.name=Bazarr"
       - "homepage.icon=bazarr.png"
       - "homepage.href=https://bazarr.${DOMAIN}"
