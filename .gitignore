@@ -1,3 +1,4 @@
+.env
 media-streaming/config
 home-traefik/letsencrypt
 homepage/config/logs
