@@ -6,3 +6,4 @@ homepage/config/custom.css
 homepage/config/custom.js
 homepage/config/kubernetes.yaml
 homepage/config/proxmox.yaml
+backups/rclone.conf

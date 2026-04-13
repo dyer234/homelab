@@ -1,0 +1,18 @@
+services:
+  backups:
+    image: rclone/rclone:latest
+    container_name: backups
+    entrypoint: /bin/sh
+    command:
+      - /opt/backup/backup.sh
+    environment:
+      - TZ=${TZ}
+      - RCLONE_CONFIG=/opt/backup/rclone.conf
+      - BACKUP_CRON=${BACKUP_CRON:-0 3 * * *}
+      - B2_BUCKET=${B2_BUCKET:-homelab-backups}
+    volumes:
+      - ./backup.sh:/opt/backup/backup.sh:ro
+      - ./rclone.conf:/opt/backup/rclone.conf:ro
+      - ../home-traefik/letsencrypt:/data/home-traefik/letsencrypt:ro
+      - ../media-streaming/config:/data/media-streaming/config:ro
+    restart: unless-stopped
