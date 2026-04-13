@@ -22,6 +22,7 @@ echo ""
 echo "Targets:"
 echo "  - $HOMELAB_DIR/home-traefik/letsencrypt/"
 echo "  - $HOMELAB_DIR/media-streaming/config/"
+echo "  - $HOMELAB_DIR/n8n/data/"
 echo ""
 printf "Continue? [y/N] "
 read -r confirm
@@ -44,6 +45,14 @@ docker run --rm \
   -v "$HOMELAB_DIR/media-streaming/config:/data/media-streaming/config" \
   rclone/rclone:latest \
   sync "$REMOTE/media-streaming/config" /data/media-streaming/config \
+  --config /opt/backup/rclone.conf --verbose
+
+log "Restoring n8n/data"
+docker run --rm \
+  -v "$SCRIPT_DIR/rclone.conf:/opt/backup/rclone.conf:ro" \
+  -v "$HOMELAB_DIR/n8n/data:/data/n8n/data" \
+  rclone/rclone:latest \
+  sync "$REMOTE/n8n/data" /data/n8n/data \
   --config /opt/backup/rclone.conf --verbose
 
 log "Restore complete"

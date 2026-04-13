@@ -14,6 +14,9 @@ run_backup() {
   log "Backing up media-streaming/config"
   rclone sync /data/media-streaming/config "$REMOTE/media-streaming/config" --verbose
 
+  log "Backing up n8n/data"
+  rclone sync /data/n8n/data "$REMOTE/n8n/data" --filter-from /opt/backup/exclude-filters.txt --verbose
+
   log "Backup complete"
 }
 

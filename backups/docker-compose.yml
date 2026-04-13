@@ -15,4 +15,5 @@ services:
       - ./exclude-filters.txt:/opt/backup/exclude-filters.txt:ro
       - ../home-traefik/letsencrypt:/data/home-traefik/letsencrypt:ro
       - ../media-streaming/config:/data/media-streaming/config:ro
+      - ../n8n/data:/data/n8n/data:ro
     restart: unless-stopped
