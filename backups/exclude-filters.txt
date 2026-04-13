@@ -1,0 +1,28 @@
+# Logs
+**/logs/
+**/log/
+**/logs.db
+
+# Database temp files
+**/*.db-wal
+**/*.db-shm
+**/*.db-journal
+
+# Caches
+**/cache/
+**/GeoDB/
+
+# Media artwork (re-fetched from metadata providers)
+**/MediaCover/
+**/MediaCoverCache/
+
+# Process/lock files
+**/*.pid
+**/lockfile
+**/storage.lock
+
+# Temp/crash reporting
+**/Sentry/
+**/BT_backup/
+**/backup/
+**/restore/

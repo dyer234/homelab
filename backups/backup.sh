@@ -1,6 +1,5 @@
 #!/bin/sh
 REMOTE="b2:${B2_BUCKET:-homelab-backups}"
-INTERVAL="${BACKUP_INTERVAL:-86400}"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
@@ -21,10 +20,11 @@ run_backup() {
 # Run once on startup
 run_backup
 
-# Then loop on the interval
-log "Next backup in ${INTERVAL}s"
-while true; do
-  sleep "$INTERVAL"
-  run_backup
-  log "Next backup in ${INTERVAL}s"
-done
+# Then run on the cron schedule
+log "Scheduling backups with cron: $BACKUP_CRON"
+
+# Write crontab
+echo "$BACKUP_CRON /bin/sh -c '. /opt/backup/backup.sh' >> /proc/1/fd/1 2>&1" | crontab -
+
+# Run crond in foreground
+crond -f -l 2
