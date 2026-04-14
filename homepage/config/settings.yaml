@@ -3,10 +3,10 @@ title: Homelab
 layout:
   Media:
     style: row
-    columns: 2
+    columns: 1
   Find New:
     style: row
     columns: 2
   Downloads:
     style: row
-    columns: 2
+    columns: 1
