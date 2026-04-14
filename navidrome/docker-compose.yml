@@ -1,0 +1,27 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ./config:/data
+      - ${MUSIC_HOST}:${MUSIC_CONTAINER}:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.navidrome.rule=Host(`navidrome.${DOMAIN}`)"
+      - "traefik.http.routers.navidrome.entrypoints=websecure"
+      - "traefik.http.routers.navidrome.tls.certresolver=letsencrypt"
+      - "traefik.http.services.navidrome.loadbalancer.server.port=4533"
+      - "homepage.group=Media"
+      - "homepage.name=Navidrome"
+      - "homepage.icon=navidrome.png"
+      - "homepage.href=https://navidrome.${DOMAIN}"
+      - "homepage.description=Music Server"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true

@@ -20,6 +20,9 @@ run_backup() {
   log "Backing up ai/open-webui"
   rclone sync /data/ai/open-webui "$REMOTE/ai/open-webui" --filter-from /opt/backup/exclude-filters.txt --verbose
 
+  log "Backing up navidrome/config"
+  rclone sync /data/navidrome/config "$REMOTE/navidrome/config" --filter-from /opt/backup/exclude-filters.txt --verbose
+
   log "Backup complete"
 }
 
