@@ -16,4 +16,5 @@ services:
       - ../home-traefik/letsencrypt:/data/home-traefik/letsencrypt:ro
       - ../media-streaming/config:/data/media-streaming/config:ro
       - ../n8n/data:/data/n8n/data:ro
+      - ../ai/open-webui:/data/ai/open-webui:ro
     restart: unless-stopped

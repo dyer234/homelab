@@ -112,8 +112,6 @@ services:
     networks:
       - media_net
       - traefik-public
-    devices:
-      - /dev/dri:/dev/dri
     restart: unless-stopped
 
   wireguard:

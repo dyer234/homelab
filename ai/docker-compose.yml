@@ -1,0 +1,24 @@
+services:
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    volumes:
+      - ./open-webui:/app/backend/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openwebui.rule=Host(`ai.${DOMAIN}`)"
+      - "traefik.http.routers.openwebui.entrypoints=websecure"
+      - "traefik.http.routers.openwebui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.openwebui.loadbalancer.server.port=8080"
+      - "homepage.group=AI"
+      - "homepage.name=Open WebUI"
+      - "homepage.icon=open-webui.png"
+      - "homepage.href=https://ai.${DOMAIN}"
+      - "homepage.description=AI Chat Interface"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true

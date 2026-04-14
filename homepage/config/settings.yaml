@@ -1,6 +1,9 @@
 title: Homelab
 
 layout:
+  AI:
+    style: row
+    columns: 1
   Media:
     style: row
     columns: 1

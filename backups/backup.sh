@@ -17,6 +17,9 @@ run_backup() {
   log "Backing up n8n/data"
   rclone sync /data/n8n/data "$REMOTE/n8n/data" --filter-from /opt/backup/exclude-filters.txt --verbose
 
+  log "Backing up ai/open-webui"
+  rclone sync /data/ai/open-webui "$REMOTE/ai/open-webui" --filter-from /opt/backup/exclude-filters.txt --verbose
+
   log "Backup complete"
 }
 
