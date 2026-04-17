@@ -114,41 +114,6 @@ services:
       - traefik-public
     restart: unless-stopped
 
-  wireguard:
-    image: lscr.io/linuxserver/wireguard:latest
-    container_name: wireguard
-    labels:
-      - "autoheal=true"
-    cap_add:
-      - NET_ADMIN
-    dns:
-      - 1.1.1.1
-      - 9.9.9.9
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=${TZ}
-    volumes:
-      - ./config/wireguard:/config
-      - ./wireguard:/opt/wireguard
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-      - net.ipv4.ip_forward=1
-      - net.ipv6.conf.all.disable_ipv6=1
-    ports:
-      - "6881:6881/tcp"
-      - "6881:6881/udp"
-    healthcheck:
-      test: ["CMD-SHELL", "sh /opt/wireguard/healthcheck.sh"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 180s
-    networks:
-      - media_net
-      - traefik-public
-    restart: unless-stopped
-
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
@@ -170,7 +135,7 @@ services:
 
   gluetun:
     image: qmcgaw/gluetun:latest
-    container_name: gluetun
+    container_name: wireguard
     labels:
       - "autoheal=true"
       # qBittorrent routes through gluetun's network,
@@ -186,7 +151,7 @@ services:
       - "homepage.href=https://qbit.${DOMAIN}"
       - "homepage.description=Torrent Client"
       - "homepage.widget.type=qbittorrent"
-      - "homepage.widget.url=http://gluetun:8181"
+      - "homepage.widget.url=http://wireguard:8181"
     cap_add:
       - NET_ADMIN
     environment:
