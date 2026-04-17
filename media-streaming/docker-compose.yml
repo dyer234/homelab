@@ -119,9 +119,9 @@ services:
     container_name: qbittorrent
     labels:
       - "autoheal=true"
-    network_mode: "service:gluetun"
+    network_mode: "service:wireguard"
     depends_on:
-      gluetun:
+      wireguard:
         condition: service_healthy
     environment:
       - PUID=1000
@@ -133,12 +133,12 @@ services:
       - ${MEDIA_HOST}:${MEDIA_CONTAINER}
     restart: unless-stopped
 
-  gluetun:
+  wireguard:
     image: qmcgaw/gluetun:latest
     container_name: wireguard
     labels:
       - "autoheal=true"
-      # qBittorrent routes through gluetun's network,
+      # qBittorrent routes through wireguard's network,
       # so Traefik labels for qbit go HERE
       - "traefik.enable=true"
       - "traefik.http.routers.qbittorrent.rule=Host(`qbit.${DOMAIN}`)"
