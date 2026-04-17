@@ -9,6 +9,7 @@ services:
       - TZ=${TZ}
       - RCLONE_CONFIG=/opt/backup/rclone.conf
       - BACKUP_CRON=${BACKUP_CRON:-0 3 * * *}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
     volumes:
       - ./backup.sh:/opt/backup/backup.sh:ro
       - ./rclone.conf:/opt/backup/rclone.conf:ro
@@ -17,4 +18,5 @@ services:
       - ../media-streaming/config:/data/media-streaming/config:ro
       - ../n8n/data:/data/n8n/data:ro
       - ../ai/open-webui:/data/ai/open-webui:ro
+      - ../navidrome/config:/data/navidrome/config:ro
     restart: unless-stopped
