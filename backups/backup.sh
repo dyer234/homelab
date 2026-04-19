@@ -36,6 +36,7 @@ run_backup() {
   tar_and_upload "ai" "/data/ai/open-webui" "/opt/backup/exclude-filters.txt"
   tar_and_upload "navidrome" "/data/navidrome/config" "/opt/backup/exclude-filters.txt"
   tar_and_upload "jenkins" "/data/jenkins/data" "/opt/backup/exclude-filters.txt"
+  tar_and_upload "wireguard" "/data/wireguard/config"
 
   rm -rf "$STAGING"
 

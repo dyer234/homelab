@@ -20,4 +20,5 @@ services:
       - ../ai/open-webui:/data/ai/open-webui:ro
       - ../navidrome/config:/data/navidrome/config:ro
       - ../jenkins/data:/data/jenkins/data:ro
+      - ../wireguard/config:/data/wireguard/config:ro
     restart: unless-stopped

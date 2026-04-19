@@ -9,4 +9,5 @@ homepage/config/proxmox.yaml
 backups/rclone.conf
 n8n/data
 ai/open-webui
-navidrome/config
+ntavidrome/config
+jenkins/data
