@@ -1,0 +1,32 @@
+services:
+  jenkins:
+    build: .
+    pull_policy: build
+    container_name: jenkins
+    ports:
+      - "50000:50000"
+    volumes:
+      - ./data:/var/jenkins_home
+      - jenkins_root:/root
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jenkins.rule=Host(`jenkins.${DOMAIN}`)"
+      - "traefik.http.routers.jenkins.entrypoints=websecure"
+      - "traefik.http.routers.jenkins.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jenkins.loadbalancer.server.port=8080"
+      - "homepage.group=Automation"
+      - "homepage.name=Jenkins"
+      - "homepage.icon=jenkins.png"
+      - "homepage.href=https://jenkins.${DOMAIN}"
+      - "homepage.description=CI/CD Server"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true
+
+volumes:
+  jenkins_root:
