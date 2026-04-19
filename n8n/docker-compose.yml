@@ -23,8 +23,12 @@ services:
       - "homepage.description=Workflow Automation"
     networks:
       - traefik-public
+      - media_net
     restart: unless-stopped
 
 networks:
   traefik-public:
     external: true
+  media_net:
+    external: true
+    name: media-streaming_media_net

@@ -19,4 +19,5 @@ services:
       - ../n8n/data:/data/n8n/data:ro
       - ../ai/open-webui:/data/ai/open-webui:ro
       - ../navidrome/config:/data/navidrome/config:ro
+      - ../jenkins/data:/data/jenkins/data:ro
     restart: unless-stopped
