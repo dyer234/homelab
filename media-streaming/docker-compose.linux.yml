@@ -1,0 +1,10 @@
+services:
+  emby:
+    devices:
+      - /dev/dri:/dev/dri
+
+  gluetun:
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1

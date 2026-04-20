@@ -1,4 +1,0 @@
-services:
-  emby:
-    devices:
-      - /dev/dri:/dev/dri
