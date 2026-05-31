@@ -1,0 +1,13 @@
+services:
+  ddns:
+    image: alpine:3.20
+    container_name: ddns
+    command: ["sh", "-c", "apk add --no-cache curl jq bash >/dev/null && exec /usr/local/bin/update-dns.sh"]
+    environment:
+      - DO_TOKEN=${DO_TOKEN}
+      - DOMAIN=${DOMAIN}
+      - RECORD_NAMES=${RECORD_NAMES:-@,*}
+      - INTERVAL=${INTERVAL:-300}
+    volumes:
+      - ./update-dns.sh:/usr/local/bin/update-dns.sh:ro
+    restart: unless-stopped

@@ -8,6 +8,7 @@ services:
       - "--providers.docker.network=traefik-public"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.redis.address=:6379"
       # Redirect HTTP -> HTTPS
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
@@ -23,6 +24,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "6379:6379"
     environment:
       - DO_AUTH_TOKEN=${DO_AUTH_TOKEN}
     volumes:
