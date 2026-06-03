@@ -1,7 +1,10 @@
 services:
-  traefik:
-    image: traefik:latest
-    container_name: traefik
+  home-traefik:
+    # Pinned to an explicit version tag on purpose: a CI build on this Docker
+    # host tags a custom image as `traefik:latest`, which shadowed the official
+    # one and broke routing. Never use the bare `:latest` tag here.
+    image: traefik:v3.2.5
+    container_name: home-traefik
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"

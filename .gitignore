@@ -13,3 +13,7 @@ ntavidrome/config
 jenkins/data
 navidrome/config
 wireguard/config
+
+# File Browser config/database (keep dir, ignore contents)
+filebrowser/database/*
+!filebrowser/database/.gitkeep
