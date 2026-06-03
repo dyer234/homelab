@@ -1,0 +1,32 @@
+services:
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: filebrowser
+    user: "${PUID}:${PGID}"
+    environment:
+      - FB_DATABASE=/database/filebrowser.db
+      - FB_ROOT=/srv
+      - TZ=${TZ}
+    volumes:
+      # Media library — read-write so files can be uploaded into it
+      - ${MEDIA_HOST}:/srv
+      # Persisted users / settings database
+      - ./database:/database
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.filebrowser.rule=Host(`files.${DOMAIN}`)"
+      - "traefik.http.routers.filebrowser.entrypoints=websecure"
+      - "traefik.http.routers.filebrowser.tls.certresolver=letsencrypt"
+      - "traefik.http.services.filebrowser.loadbalancer.server.port=80"
+      - "homepage.group=Media"
+      - "homepage.name=File Browser"
+      - "homepage.icon=filebrowser.png"
+      - "homepage.href=https://files.${DOMAIN}"
+      - "homepage.description=Browse & Upload Files"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true
