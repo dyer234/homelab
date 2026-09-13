@@ -41,10 +41,19 @@ run_backup() {
   rm -rf "$STAGING"
 
   log "Cleaning up backups older than $RETENTION_DAYS days"
-  rclone delete "$REMOTE" --min-age "${RETENTION_DAYS}d" --verbose
+  # --b2-hard-delete: without it B2 only hides old versions, so they keep
+  # costing storage until a lifecycle rule purges them.
+  rclone delete "$REMOTE" --min-age "${RETENTION_DAYS}d" --b2-hard-delete --verbose
 
   log "Backup complete"
 }
+
+# Cron invokes us with --once so we don't re-enter the scheduler below
+# (sourcing the whole script from cron used to spawn a fresh crond per run).
+if [ "$1" = "--once" ]; then
+  run_backup
+  exit 0
+fi
 
 # Run once on startup
 run_backup
@@ -52,8 +61,9 @@ run_backup
 # Then run on the cron schedule
 log "Scheduling backups with cron: $BACKUP_CRON"
 
-# Write crontab
-echo "$BACKUP_CRON /bin/sh -c '. /opt/backup/backup.sh' >> /proc/1/fd/1 2>&1" | crontab -
+# Write crontab. Env vars are passed explicitly since crond does not
+# reliably inherit the container environment.
+echo "$BACKUP_CRON B2_BUCKET='$B2_BUCKET' BACKUP_RETENTION_DAYS='$RETENTION_DAYS' RCLONE_CONFIG='$RCLONE_CONFIG' /bin/sh /opt/backup/backup.sh --once >> /proc/1/fd/1 2>&1" | crontab -
 
 # Run crond in foreground
 crond -f -l 2

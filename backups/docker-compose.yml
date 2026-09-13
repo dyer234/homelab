@@ -8,6 +8,7 @@ services:
     environment:
       - TZ=${TZ}
       - RCLONE_CONFIG=/opt/backup/rclone.conf
+      - B2_BUCKET=${B2_BUCKET:?B2_BUCKET must be set in .env}
       - BACKUP_CRON=${BACKUP_CRON:-0 3 * * *}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
     volumes:

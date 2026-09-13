@@ -6,14 +6,31 @@ Automated backups to Backblaze B2 using [rclone](https://rclone.org/).
 
 | Source | Remote path |
 |---|---|
-| `home-traefik/letsencrypt/` | `<bucket>/home-traefik/letsencrypt/` |
-| `media-streaming/config/` | `<bucket>/media-streaming/config/` |
+| `home-traefik/letsencrypt/` | `<bucket>/home-traefik/home-traefik-<date>.tar.gz` |
+| `media-streaming/config/` | `<bucket>/media-streaming/media-streaming-<date>.tar.gz` |
+| `n8n/data/` | `<bucket>/n8n/n8n-<date>.tar.gz` |
+| `ai/open-webui/` | `<bucket>/ai/ai-<date>.tar.gz` |
+| `navidrome/config/` | `<bucket>/navidrome/navidrome-<date>.tar.gz` |
+| `jenkins/data/` | `<bucket>/jenkins/jenkins-<date>.tar.gz` |
+| `gluetun/.env` | `<bucket>/gluetun-env/gluetun-env-<date>.tar.gz` |
+
+Paths matching `exclude-filters.txt` (logs, caches, artwork, sqlite WAL files) are skipped.
 
 ## How it works
 
 - Runs a backup immediately on container startup
-- Then repeats on a configurable interval (default: 24 hours)
-- Uses `rclone sync` to mirror local state to B2
+- Then runs on `BACKUP_CRON` (default: daily at 3am)
+- Each source is tarred and uploaded as a dated archive; archives older than
+  `BACKUP_RETENTION_DAYS` are hard-deleted from the bucket
+
+## Checking it worked
+
+```bash
+docker logs backups | grep -E 'ERROR|NOTICE|Backing up|complete'
+docker exec backups rclone lsl b2:$B2_BUCKET
+```
+
+A healthy run has no `ERROR` lines and one dated archive per source.
 
 ## Configuration
 
@@ -24,8 +41,9 @@ Copy `.env.template` to `.env` and `rclone.conf.template` to `rclone.conf`, then
 | Variable | Description |
 |---|---|
 | `TZ` | Timezone |
-| `BACKUP_INTERVAL` | Seconds between backups (default: `86400`) |
-| `B2_BUCKET` | Backblaze B2 bucket name |
+| `BACKUP_CRON` | Cron schedule (default: `0 3 * * *`) |
+| `B2_BUCKET` | Backblaze B2 bucket name (required; must already exist) |
+| `BACKUP_RETENTION_DAYS` | Days to keep archives (default: `7`) |
 
 ### rclone.conf
 
