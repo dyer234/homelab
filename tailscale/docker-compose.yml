@@ -1,0 +1,89 @@
+# Tailscale subnet router for the homelab's Docker network.
+#
+# Why this exists alongside Tailscale on the host:
+#   - The host install only covers the *host's* published ports, and only while
+#     the host daemon is running. This container puts the container network on
+#     the tailnet whenever the homelab itself is up.
+#   - It is the forward-compatible path. When the homelab moves back to the Linux
+#     host, this stack is unchanged — only the host-level Tailscale install goes
+#     away. Nothing downstream (ACLs, agent config) has to be rewritten.
+#
+# It advertises the traefik-public subnet rather than proxying a single service,
+# so every container is reachable by its network address. Deliberately NOT using
+# `network_mode: service:` — that is the netns trap this repo already hit with
+# gluetun/qBittorrent, where recreating the network container leaves the
+# dependent container permanently broken.
+
+services:
+  tailscale:
+    # Pinned deliberately. A floating tag on infrastructure this load-bearing is
+    # how home-traefik got broken once already.
+    image: tailscale/tailscale:v1.102.3
+    container_name: tailscale
+    hostname: ${TS_HOSTNAME:-homelab-docker}
+    environment:
+      # A pre-minted, TAGGED device auth key (tskey-auth-...). The tag is baked
+      # into the key at creation, so no --advertise-tags is needed here — and no
+      # ?preauthorized=/?ephemeral= query params either. Those are only valid on
+      # an OAuth client secret, where Tailscale mints a key on the fly; appended
+      # to a real auth key they become part of the key string and invalidate it.
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME:-homelab-docker}
+      - TS_STATE_DIR=/var/lib/tailscale
+      # Advertise the Docker network so tailnet peers can reach containers
+      # directly. Routes are auto-approved by the autoApprovers block in
+      # infra/tailscale/policy.hujson — no manual click in the admin console.
+      - TS_ROUTES=${TS_ROUTES:-172.23.0.0/16}
+      # Kernel networking. Userspace mode (the image default) CANNOT act as a
+      # subnet router, so this is required, not an optimisation.
+      - TS_USERSPACE=false
+      # Exposes /healthz on TS_LOCAL_ADDR_PORT; returns 200 once the node has a
+      # tailnet IP. Drives the healthcheck below.
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=0.0.0.0:41234
+      # Only log in once; without it a restart re-runs `tailscale up` and can
+      # trip over an already-consumed single-use key.
+      - TS_AUTH_ONCE=true
+      # Tag the node explicitly rather than relying on the auth key having been
+      # minted with tags. An untagged node is user-owned, and the autoApprovers
+      # block in infra/tailscale/policy.hujson keys on tag:homelab-docker — so an
+      # untagged router advertises its route and then waits forever for a manual
+      # approval that never comes. Declaring it here puts the tag in the repo
+      # instead of in however someone happened to generate the key.
+      #
+      # This MUST match the key's tags if the key has any, or registration is
+      # rejected outright. An untagged key is fine: you are a tagOwner for it.
+      - TS_EXTRA_ARGS=--advertise-tags=tag:homelab-docker
+    volumes:
+      # Node identity. Without a persistent state dir the container registers as
+      # a NEW node on every recreate, and the old one lingers holding the
+      # hostname — which is how you end up with homelab-docker-1, -2, -3.
+      - ./state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      # Subnet routing forwards packets between interfaces. Set explicitly rather
+      # than inherited — /proc/sys is read-only in the container, so containerboot
+      # cannot turn this on itself.
+      - net.ipv4.ip_forward=1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:41234/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "autoheal=true"
+      - "homepage.group=Network"
+      - "homepage.name=Tailscale"
+      - "homepage.icon=tailscale.png"
+      - "homepage.description=Tailnet subnet router for the Docker network"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true

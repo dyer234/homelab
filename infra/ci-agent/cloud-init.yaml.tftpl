@@ -1,0 +1,139 @@
+#cloud-config
+# ASCII ONLY. cloud-init parses this document strictly: a single non-ASCII
+# byte (a typographic dash, a curly quote) makes it fail with
+#   "unacceptable character #x0080 ... position N"
+# and then DISCARD THE WHOLE DOCUMENT. The droplet boots clean with nothing
+# installed and no error anywhere except /var/log/cloud-init.log. An em dash
+# in a comment cost three droplets. There is a precondition in main.tf that
+# now fails the plan instead.
+# Build agent bootstrap. runcmd entries execute sequentially, which is doing real
+# work here: Tailscale must be up before the Jenkins agent starts, or the agent
+# cannot reach the controller and lands in a retry loop.
+
+package_update: true
+packages:
+  - curl
+  - ca-certificates
+
+write_files:
+  # Agent image, built locally on the droplet at boot.
+  #
+  # WHY BUILD RATHER THAN PULL: jenkins/inbound-agent ships a JDK and git, and
+  # nothing else. Mounting /var/run/docker.sock into it hands the agent a socket
+  # with no client to speak to it, so `docker build` in a Jenkinsfile fails with
+  # "docker: not found" -- the socket mount looks correct and does nothing. The
+  # tooling has to be INSIDE the agent container, which means a custom image, and
+  # a custom image pulled from a registry would have to be built by an agent that
+  # does not exist yet. Building it here breaks that circle with no registry.
+  #
+  # The toolchain deliberately mirrors jenkins/Dockerfile so a Jenkinsfile that
+  # runs on the controller runs here unchanged. OpenTofu is the one exception: it
+  # is controller-only, because the controller is what provisions these agents.
+  - path: /opt/ci-agent/Dockerfile
+    permissions: "0644"
+    content: |
+      FROM ${agent_base_image}
+
+      USER root
+
+      # Docker CLI + buildx. docker-ce-cli alone has no `docker buildx`, and
+      # modern `docker build` delegates to buildx -- without the plugin, builds
+      # fail on syntax the controller accepts.
+      RUN apt-get update && \
+          apt-get install -y ca-certificates curl gnupg git git-crypt && \
+          install -m 0755 -d /etc/apt/keyrings && \
+          curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
+          chmod a+r /etc/apt/keyrings/docker.asc && \
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" \
+            > /etc/apt/sources.list.d/docker.list && \
+          apt-get update && \
+          apt-get install -y docker-ce-cli docker-buildx-plugin && \
+          rm -rf /var/lib/apt/lists/*
+
+      # doctl, for pushing to DigitalOcean Container Registry.
+      RUN ARCH=$(dpkg --print-architecture) && \
+          DOCTL_VERSION=1.104.0 && \
+          curl -fsSL -o /tmp/doctl.tar.gz \
+            "https://github.com/digitalocean/doctl/releases/download/v$DOCTL_VERSION/doctl-$DOCTL_VERSION-linux-$ARCH.tar.gz" && \
+          tar xzf /tmp/doctl.tar.gz -C /usr/local/bin doctl && \
+          chmod +x /usr/local/bin/doctl && \
+          rm -f /tmp/doctl.tar.gz
+
+      # 1Password CLI, for pipelines that resolve secrets with `op`.
+      RUN ARCH=$(dpkg --print-architecture) && \
+          curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+            gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg && \
+          echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$ARCH stable main" \
+            > /etc/apt/sources.list.d/1password.list && \
+          apt-get update && apt-get install -y 1password-cli && \
+          rm -rf /var/lib/apt/lists/*
+
+      # Back to the unprivileged agent user. The container still reaches the
+      # docker socket, via --group-add on the run command rather than by
+      # running as root.
+      USER jenkins
+
+runcmd:
+  # 1. Join the tailnet. `tailscale up` blocks until the node is connected, so
+  #    this is the synchronisation point for everything below.
+  #
+  #    No --advertise-tags: the tag is carried by the auth key itself. If you do
+  #    ever add the flag, it MUST match the key's tags exactly or registration is
+  #    rejected outright with "requested tags are invalid or not permitted".
+  #
+  #    --accept-routes is REQUIRED, not optional. The controller is reached at a
+  #    Docker network address advertised by the subnet router in the homelab's
+  #    tailscale stack. A node ignores advertised subnet routes unless it opts in,
+  #    so without this flag the agent joins the tailnet successfully and then
+  #    cannot reach Jenkins at all -- with no error that points at the cause.
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --authkey='${authkey}' --hostname='${hostname}' --ssh --accept-routes
+
+  # 2. Docker daemon on the droplet. The agent container talks to THIS daemon
+  #    through the mounted socket, so builds run on the droplet's amd64 kernel --
+  #    which is the entire reason this droplet exists.
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable --now docker
+  # get.docker.com returns before the socket is necessarily accepting; the build
+  # on the next line fails outright if it is not ready.
+  - timeout 60 sh -c 'until docker info >/dev/null 2>&1; do sleep 2; done'
+
+  # 3. Build the agent image described in write_files above.
+  - docker build -t ci-agent:local /opt/ci-agent
+
+  # 4. Jenkins inbound agent.
+  #
+  #    --network=host so the container shares the droplet's netns and can route
+  #    over tailscale0 to reach the controller. Anything else and the tailnet is
+  #    invisible to it.
+  #
+  #    --group-add is what lets Jenkins run docker. The image ends with
+  #    USER jenkins, and /var/run/docker.sock is root:docker 0660, so without
+  #    membership in the HOST's docker group every build fails with
+  #    "permission denied while trying to connect to the Docker daemon socket".
+  #    The GID is read from this host because it is not stable across images.
+  #
+  #    Guard first. If the group is missing the substitution yields
+  #    --group-add "" , docker run fails, no agent ever connects, and the Jenkins
+  #    UI just shows an offline node with no reason given.
+  # Single-quoted because `cut -d: -f3` contains a colon-space, which YAML reads
+  # as a key/value separator in a plain scalar -- the entry silently becomes a
+  # mapping instead of a command string.
+  - 'test -n "$(getent group docker | cut -d: -f3)" || echo "FATAL - no docker group on host, agent will not be able to build"'
+  - >
+    docker run -d --restart=always --name jenkins-agent
+    --network=host
+    --group-add "$(getent group docker | cut -d: -f3)"
+    -v /var/run/docker.sock:/var/run/docker.sock
+    -e JENKINS_URL='${jenkins_url}'
+    -e JENKINS_AGENT_NAME='${agent_name}'
+    -e JENKINS_SECRET='${agent_secret}'
+    -e JENKINS_AGENT_WORKDIR=/home/jenkins/agent
+    ci-agent:local
+
+  # 5. Prove Jenkins can actually use Docker, at boot rather than at the first
+  #    build. `docker exec` runs as the container's own user (jenkins), so this
+  #    exercises the exact path a build takes -- unprivileged user, mounted
+  #    socket, supplementary group. Result lands in /var/log/cloud-init-output.log.
+  - timeout 90 sh -c 'until docker exec jenkins-agent docker version >/dev/null 2>&1; do sleep 3; done' && echo "OK - jenkins user can reach the docker daemon" || echo "FATAL - jenkins user cannot reach the docker daemon"
+  - docker exec jenkins-agent docker version --format 'agent sees server {{.Server.Version}}' || true

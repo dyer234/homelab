@@ -4,6 +4,10 @@ services:
     pull_policy: build
     container_name: jenkins
     ports:
+      # JNLP port for inbound agents on the LAN. Cloud agents do NOT use this —
+      # they reach both 8080 and 50000 on the container IP below, via the
+      # subnet router in ../tailscale. Deliberately not publishing 8080 on the
+      # host: it would add LAN exposure without buying the agents anything.
       - "50000:50000"
     volumes:
       - ./data:/var/jenkins_home
@@ -21,7 +25,12 @@ services:
       - "homepage.href=https://jenkins.${DOMAIN}"
       - "homepage.description=CI/CD Server"
     networks:
-      - traefik-public
+      traefik-public:
+        # Static, because the build agents target this address by value. Docker
+        # hands out dynamic IPs from the bottom of 172.23.0.0/16, so a high
+        # address will not be allocated out from under us. Changing it means
+        # changing infra/ci-agent's jenkins_url to match.
+        ipv4_address: 172.23.255.10
     restart: unless-stopped
 
 networks:

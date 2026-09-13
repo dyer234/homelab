@@ -17,3 +17,9 @@ wireguard/config
 # File Browser config/database (keep dir, ignore contents)
 filebrowser/database/*
 !filebrowser/database/.gitkeep
+
+# Tailscale node state (keep dir, ignore contents)
+tailscale/state/*
+!tailscale/state/.gitkeep
+tailscale/.env
+.DS_Store

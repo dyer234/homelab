@@ -1,0 +1,11 @@
+# Baseline plugin set. The controller was running with ZERO plugins installed,
+# which meant no Pipeline support at all — node(), timeout() and post{} blocks
+# did not exist. Everything the cloud-agent work depends on starts here.
+#
+# No versions pinned: jenkins-plugin-cli resolves latest compatible + deps.
+workflow-aggregator
+git
+credentials-binding
+docker-workflow
+ws-cleanup
+timestamper

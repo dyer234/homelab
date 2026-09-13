@@ -10,7 +10,8 @@ Docker-based homelab running media streaming services behind Traefik, with DNS m
 | [media-streaming](media-streaming/) | Emby, Sonarr, Radarr, Prowlarr, Bazarr, qBittorrent over WireGuard |
 | [homepage](homepage/) | Dashboard for all services |
 | [backups](backups/) | Automated backups to Backblaze B2 |
-| [infra](infra/) | DNS records via OpenTofu on DigitalOcean |
+| [tailscale](tailscale/) | Tailnet subnet router putting the Docker network on the tailnet |
+| [infra](infra/) | DNS, tailnet policy and cloud CI agents via OpenTofu on DigitalOcean |
 
 ## Scripts
 

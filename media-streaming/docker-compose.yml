@@ -93,6 +93,8 @@ services:
     volumes:
       - ./config/emby:/config
       - ${MEDIA_HOST}:${MEDIA_CONTAINER}
+    ports:
+      - "8096:8096"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.emby.rule=Host(`emby.${DOMAIN}`)"
@@ -139,8 +141,16 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${PROTONVPN_WIREGUARD_PRIVATE_KEY}
       - SERVER_COUNTRIES=${PROTONVPN_SERVER_COUNTRIES:-United States}
-      - FIREWALL=off
+      # The firewall (and with it the kill switch) is ON — that is gluetun's
+      # default and it is what we want. `FIREWALL=off` used to sit here and did
+      # nothing: gluetun renamed the toggle to
+      # FIREWALL_ENABLED_DISABLING_IT_SHOOTS_YOU_IN_YOUR_FOOT and ignores the
+      # old name, so the line only ever misled anyone reading this file.
+      # Opens 6881 on the VPN interface for torrent peers:
       - FIREWALL_VPN_INPUT_PORTS=6881
+      # Opens 8181 on the Docker interfaces so Traefik and Sonarr can reach the
+      # qBittorrent WebUI. Without it Sonarr fails with
+      # "Download client failed to add torrent by url".
       - FIREWALL_INPUT_PORTS=8181
       - TZ=${TZ}
     ports:
