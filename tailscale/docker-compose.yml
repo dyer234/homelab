@@ -54,6 +54,16 @@ services:
       # This MUST match the key's tags if the key has any, or registration is
       # rejected outright. An untagged key is fine: you are a tagOwner for it.
       - TS_EXTRA_ARGS=--advertise-tags=tag:homelab-docker
+      # Pin the WireGuard/disco UDP port so it can be published below and
+      # port-forwarded on the router. Without this tailscaled picks a random
+      # port behind Docker Desktop's symmetric NAT and every remote peer is
+      # stuck on DERP. This is a tailscaled flag, NOT a `tailscale up` flag,
+      # so it cannot live in TS_EXTRA_ARGS. Not 41641: the host's own
+      # Tailscale already owns that.
+      - TS_TAILSCALED_EXTRA_ARGS=--port=41642
+    ports:
+      # Must also be forwarded on the home router (UDP 41642 -> this host).
+      - "41642:41642/udp"
     volumes:
       # Node identity. Without a persistent state dir the container registers as
       # a NEW node on every recreate, and the old one lingers holding the
