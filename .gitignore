@@ -23,3 +23,6 @@ tailscale/state/*
 !tailscale/state/.gitkeep
 tailscale/.env
 .DS_Store
+redis/data
+jenkins/jobs
+jenkins/stashed-users

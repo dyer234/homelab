@@ -79,7 +79,7 @@ variable "image" {
 }
 
 variable "ssh_key_names" {
-  description = "Names of existing DigitalOcean SSH keys to add to the droplet. Optional — Tailscale SSH is the primary access path (see the ssh block in infra/tailscale/policy.hujson, which grants it into tag:ci-agent)."
+  description = "Names of existing DigitalOcean SSH keys to add to the droplet. Optional — Tailscale SSH is the primary access path (the Tailscale SSH rule granting access into tag:ci-agent is maintained by hand in the admin console ACL)."
   type        = list(string)
   default     = []
 }

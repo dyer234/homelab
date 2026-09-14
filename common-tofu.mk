@@ -1,5 +1,5 @@
 # Shared targets for the OpenTofu modules in this tree.
-# Each module's Makefile is a single `include ../common.mk`.
+# Each module's Makefile is a single `include ../../common-tofu.mk`.
 #
 # Secrets come from 1Password at run time via 1pass.env, which holds op://
 # REFERENCES, not values (see README.md, "Secrets"). Targets that need variables

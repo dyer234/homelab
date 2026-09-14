@@ -10,10 +10,12 @@ Dashboard using [Homepage](https://gethomepage.dev/) for an overview of all home
 
 ## Configuration
 
-Copy `.env.template` to `.env` and fill in:
+Variables live in `1pass.env` (committed; secrets are `op://` references resolved by `op run`). Start with `make up` or `scripts/up.sh`.
 
 | Variable | Description |
 |---|---|
 | `DOMAIN` | Root domain for Traefik routing |
+| `JENKINS_API_USER` | Jenkins account the API token belongs to |
+| `JENKINS_API_TOKEN` | 1Password reference to a Jenkins API token (user > Security > API Token) |
 
-Service tiles are configured via Docker labels on each service container, not in Homepage's config files directly. Layout is defined in `config/settings.yaml`.
+Service tiles for containers on this host are configured via Docker labels on each container. `config/services.yaml` holds static tiles for things that are not local containers — currently the DigitalOcean CI agent, whose status is read from Jenkins' node API. Layout is defined in `config/settings.yaml`.

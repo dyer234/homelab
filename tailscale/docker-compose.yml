@@ -20,7 +20,7 @@ services:
     # how home-traefik got broken once already.
     image: tailscale/tailscale:v1.102.3
     container_name: tailscale
-    hostname: ${TS_HOSTNAME:-homelab-docker}
+    hostname: ${TS_HOSTNAME:-homelab}
     environment:
       # A pre-minted, TAGGED device auth key (tskey-auth-...). The tag is baked
       # into the key at creation, so no --advertise-tags is needed here — and no
@@ -28,11 +28,13 @@ services:
       # an OAuth client secret, where Tailscale mints a key on the fly; appended
       # to a real auth key they become part of the key string and invalidate it.
       - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_HOSTNAME=${TS_HOSTNAME:-homelab-docker}
+      - TS_HOSTNAME=${TS_HOSTNAME:-homelab}
       - TS_STATE_DIR=/var/lib/tailscale
       # Advertise the Docker network so tailnet peers can reach containers
-      # directly. Routes are auto-approved by the autoApprovers block in
-      # infra/tailscale/policy.hujson — no manual click in the admin console.
+      # directly. The route is auto-approved by an autoApprovers rule keyed on
+      # tag:homelab, maintained by hand in the admin console (Access Controls)
+      # — if it is missing, the route sits unapproved until someone clicks
+      # Edit route settings on the machine.
       - TS_ROUTES=${TS_ROUTES:-172.23.0.0/16}
       # Kernel networking. Userspace mode (the image default) CANNOT act as a
       # subnet router, so this is required, not an optimisation.
@@ -46,14 +48,14 @@ services:
       - TS_AUTH_ONCE=true
       # Tag the node explicitly rather than relying on the auth key having been
       # minted with tags. An untagged node is user-owned, and the autoApprovers
-      # block in infra/tailscale/policy.hujson keys on tag:homelab-docker — so an
-      # untagged router advertises its route and then waits forever for a manual
-      # approval that never comes. Declaring it here puts the tag in the repo
-      # instead of in however someone happened to generate the key.
+      # rule in the admin console keys on tag:homelab — so an untagged router
+      # advertises its route and then waits forever for a manual approval that
+      # never comes. Declaring it here puts the tag in the repo instead of in
+      # however someone happened to generate the key.
       #
       # This MUST match the key's tags if the key has any, or registration is
       # rejected outright. An untagged key is fine: you are a tagOwner for it.
-      - TS_EXTRA_ARGS=--advertise-tags=tag:homelab-docker
+      - TS_EXTRA_ARGS=--advertise-tags=tag:homelab
       # Pin the WireGuard/disco UDP port so it can be published below and
       # port-forwarded on the router. Without this tailscaled picks a random
       # port behind Docker Desktop's symmetric NAT and every remote peer is
@@ -67,7 +69,7 @@ services:
     volumes:
       # Node identity. Without a persistent state dir the container registers as
       # a NEW node on every recreate, and the old one lingers holding the
-      # hostname — which is how you end up with homelab-docker-1, -2, -3.
+      # hostname — which is how you end up with homelab-1, -2, -3.
       - ./state:/var/lib/tailscale
     devices:
       - /dev/net/tun:/dev/net/tun

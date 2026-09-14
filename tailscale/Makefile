@@ -1,4 +1,4 @@
-include ../docker-common.mk
+include ../common-docker.mk
 
 .PHONY: status routes
 

@@ -1,9 +1,9 @@
 # Shared targets for the docker compose apps in this tree.
-# Each app's Makefile is `include ../docker-common.mk`, optionally followed by
+# Each app's Makefile is `include ../common-docker.mk`, optionally followed by
 # app-specific targets (see tailscale/Makefile).
 #
 # Secrets: an app whose credentials live in 1Password carries a committed
-# 1pass.env of op:// REFERENCES, not values (same pattern as infra/*/1pass.env).
+# 1pass.env of op:// REFERENCES, not values (same pattern as infra/*/1pass.env; see common-tofu.mk).
 # If that file exists, `up` runs under `op run` so the references resolve into
 # the process environment, which compose reads for ${VAR} interpolation. If it
 # does not, `up` is plain docker compose and the app's .env applies as before.
