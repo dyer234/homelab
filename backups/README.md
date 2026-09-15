@@ -34,13 +34,12 @@ A healthy run has no `ERROR` lines and one dated archive per source.
 
 ## Configuration
 
-Copy `.env.template` to `.env` and `rclone.conf.template` to `rclone.conf`, then fill in:
-
-### .env
+Copy `rclone.conf.template` to `rclone.conf` and fill in the B2 credentials.
+Everything else is committed in `1pass.env`:
 
 | Variable | Description |
 |---|---|
-| `TZ` | Timezone |
+| `TZ` | Timezone (from `../homelab.env`) |
 | `BACKUP_CRON` | Cron schedule (default: `0 3 * * *`) |
 | `B2_BUCKET` | Backblaze B2 bucket name (required; must already exist) |
 | `BACKUP_RETENTION_DAYS` | Days to keep archives (default: `7`) |

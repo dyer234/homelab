@@ -2,7 +2,10 @@ services:
   ddns:
     image: alpine:3.20
     container_name: ddns
-    command: ["sh", "-c", "apk add --no-cache curl jq bash >/dev/null && exec /usr/local/bin/update-dns.sh"]
+    # busybox httpd (busybox-extras) serves the status file the updater
+    # writes to /srv, for the Homepage card below. It daemonises, so the
+    # updater still runs as PID 1.
+    command: ["sh", "-c", "apk add --no-cache curl jq bash busybox-extras >/dev/null && mkdir -p /srv && httpd -p 8080 -h /srv && exec /usr/local/bin/update-dns.sh"]
     environment:
       - DO_TOKEN=${DO_TOKEN}
       - DOMAIN=${DOMAIN}
@@ -10,4 +13,33 @@ services:
       - INTERVAL=${INTERVAL:-300}
     volumes:
       - ./update-dns.sh:/usr/local/bin/update-dns.sh:ro
+    labels:
+      - "homepage.group=Infrastructure"
+      - "homepage.name=DDNS"
+      - "homepage.icon=digital-ocean.png"
+      - "homepage.href=https://cloud.digitalocean.com/networking/domains/${DOMAIN}"
+      - "homepage.description=Keeps ${DOMAIN} A records on this host's public IP"
+      # Reads the JSON snapshot update-dns.sh writes after every cycle.
+      - "homepage.widget.type=customapi"
+      - "homepage.widget.url=http://ddns:8080/status.json"
+      - "homepage.widget.refreshInterval=60000"
+      - "homepage.widget.mappings[0].field=status"
+      - "homepage.widget.mappings[0].label=Status"
+      - "homepage.widget.mappings[0].format=text"
+      - "homepage.widget.mappings[1].field=public_ip"
+      - "homepage.widget.mappings[1].label=Public IP"
+      - "homepage.widget.mappings[1].format=text"
+      - "homepage.widget.mappings[2].field=records"
+      - "homepage.widget.mappings[2].label=Records"
+      - "homepage.widget.mappings[2].format=text"
+      - "homepage.widget.mappings[3].field=last_change_ago"
+      - "homepage.widget.mappings[3].label=Last change"
+      - "homepage.widget.mappings[3].format=text"
+    networks:
+      # Homepage polls the status endpoint over this network.
+      - traefik-public
     restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true

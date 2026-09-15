@@ -23,8 +23,14 @@ Docker-based homelab running media streaming services behind Traefik, with DNS m
 ## Setup
 
 1. Configure DNS: `cd infra/dns && tofu apply`
-2. Copy `.env.template` to `.env` in each app directory and fill in values
-3. Copy `backups/rclone.conf.template` to `backups/rclone.conf` with B2 credentials
-4. Start everything: `bash scripts/up.sh`
+2. Shared variables (`DOMAIN`, `TZ`, `PUID`/`PGID`, `MEDIA_*`, `WG_HOST`) live in
+   `homelab.env`. On a host that differs from those defaults, copy
+   `homelab.local.env.template` to `homelab.local.env` and adjust.
+3. Sign in to 1Password CLI (`op signin`, or export `OP_SERVICE_ACCOUNT_TOKEN`
+   on a server). Each app's config is its committed `1pass.env`: secrets as
+   `op://projects/homelab/...` references, resolved by `op run` at start; the
+   rest in the clear. No per-app `.env` is needed (one is honoured if present).
+4. Copy `backups/rclone.conf.template` to `backups/rclone.conf` with B2 credentials
+5. Start everything: `bash scripts/up.sh`
 
 All services are exposed as `<service>.dyerwolf.xyz` subdomains, routed through Traefik.

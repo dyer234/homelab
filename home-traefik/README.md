@@ -15,20 +15,20 @@ Creates the `traefik-public` Docker network. All other services join this networ
 
 ## Configuration
 
-Copy `.env.template` to `.env` and fill in:
+Variables and where they are set:
 
 | Variable | Description |
 |---|---|
-| `ACME_EMAIL` | Email for Let's Encrypt registration |
-| `DOMAIN` | Root domain (e.g. `dyerwolf.xyz`) |
-| `DO_AUTH_TOKEN` | DigitalOcean API token for DNS-01 challenge |
+| `ACME_EMAIL` | Email for Let's Encrypt registration (`1pass.env`) |
+| `DOMAIN` | Root domain (`../homelab.env`) |
+| `DO_AUTH_TOKEN` | DigitalOcean API token for DNS-01 challenge (`1pass.env` → 1Password `do_token`) |
 
 ## Compose files
 
 - `docker-compose.yml` — Full setup with Let's Encrypt ACME
 - `docker-compose.no-acme.yml` — Local/dev override without ACME (self-signed TLS)
 
-Set `COMPOSE_FILE=docker-compose.yml:docker-compose.no-acme.yml` in `.env` to use the local override.
+Set `NO_ACME=true` in `../homelab.local.env` to use the local override (`scripts/up.sh` and `make` both read it).
 
 ## Data
 

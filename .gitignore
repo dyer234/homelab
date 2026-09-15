@@ -26,3 +26,4 @@ tailscale/.env
 redis/data
 jenkins/jobs
 jenkins/stashed-users
+homelab.local.env

@@ -3,6 +3,11 @@ set -euo pipefail
 
 source "$(dirname "$0")/defines.sh"
 
+# Host toggles (NO_ACME) come from homelab.local.env unless already exported.
+if [ -z "${NO_ACME:-}" ] && [ -f "$HOMELAB_DIR/homelab.local.env" ]; then
+  NO_ACME="$(sed -n 's/^NO_ACME=//p' "$HOMELAB_DIR/homelab.local.env")"
+fi
+
 for app in $(get_apps); do
   echo "Starting $app..."
   compose_files="-f docker-compose.yml"
@@ -12,15 +17,23 @@ for app in $(get_apps); do
   if [ "${NO_ACME:-}" = "true" ] && [ -f "$HOMELAB_DIR/$app/docker-compose.no-acme.yml" ]; then
     compose_files="$compose_files -f docker-compose.no-acme.yml"
   fi
+  # Env files, lowest to highest precedence (see homelab.env for the why).
+  # Compose stops auto-loading .env once given any --env-file, hence the third.
+  env_files=(--env-file "$HOMELAB_DIR/homelab.env")
+  if [ -f "$HOMELAB_DIR/homelab.local.env" ]; then
+    env_files+=(--env-file "$HOMELAB_DIR/homelab.local.env")
+  fi
+  if [ -f "$HOMELAB_DIR/$app/.env" ]; then
+    env_files+=(--env-file .env)
+  fi
   # Apps whose secrets live in 1Password carry a committed 1pass.env of op://
   # references; run compose under `op run` so they resolve into the environment
-  # (compose reads ${VAR} from the process env, no .env needed). Apps without
-  # one still use their .env as before.
+  # (compose reads ${VAR} from the process env, which beats every env file).
   # ${runner[@]+...} rather than "${runner[@]}": bash 3.2 (macOS) treats an
   # empty array as unbound under set -u.
   runner=()
   if [ -f "$HOMELAB_DIR/$app/1pass.env" ]; then
     runner=(op run --env-file=1pass.env --)
   fi
-  (cd "$HOMELAB_DIR/$app" && ${runner[@]+"${runner[@]}"} docker compose $compose_files up -d --remove-orphans)
+  (cd "$HOMELAB_DIR/$app" && ${runner[@]+"${runner[@]}"} docker compose "${env_files[@]}" $compose_files up -d --remove-orphans)
 done

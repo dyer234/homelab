@@ -21,15 +21,12 @@ qBittorrent runs inside WireGuard's network stack (`network_mode: service:wiregu
 
 ## Configuration
 
-Copy `.env.template` to `.env` and fill in:
-
-| Variable | Description |
-|---|---|
-| `TZ` | Timezone (e.g. `America/Los_Angeles`) |
-| `MEDIA_HOST` | Host path to media files |
-| `MEDIA_CONTAINER` | Container mount point for media |
-| `DOMAIN` | Root domain for Traefik routing |
-| `EMBY_API_KEY` | Emby API key (for Homepage widget) |
+| Variable | Where | Description |
+|---|---|---|
+| `TZ`, `PUID`, `PGID`, `DOMAIN` | `../homelab.env` | Shared across the homelab |
+| `MEDIA_HOST`, `MEDIA_CONTAINER` | `../homelab.env` | Host path to media files and its mount point in the containers |
+| `EMBY_API_KEY` | `../homelab.local.env` | Emby API key for the Homepage widget; unique per Emby install, so set it once per host |
+| `PROTONVPN_*`, `VPN_PORT_FORWARDING*`, `FIREWALL_VPN_INPUT_PORTS` | `1pass.env` | Gluetun config; the private key is an `op://` reference |
 
 ## Data
 
