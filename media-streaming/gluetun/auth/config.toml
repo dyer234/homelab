@@ -1,0 +1,18 @@
+# Gluetun control-server roles (mounted at /gluetun/auth/config.toml).
+#
+# Since gluetun v3.40 every control-server route is denied unless a role grants
+# it. Homepage's gluetun widget polls /v1/publicip/ip to put the tunnel's public
+# IP / region / country on the dashboard card — when the tunnel is down that
+# call fails and the card says so, which is the whole point of the card.
+#
+# auth = "none" rather than an API key on purpose: these two routes are
+# read-only and only reveal which ProtonVPN exit we are on, port 8000 is not
+# published to the host, and the only things that can reach it are containers
+# on media_net / traefik-public and tailnet peers via the tailscale subnet
+# router. An API key would have to be templated into this file at `make up`
+# time (compose cannot interpolate a mounted file), which is more machinery
+# than the secret is worth.
+[[roles]]
+name = "homepage"
+routes = ["GET /v1/publicip/ip", "GET /v1/vpn/status"]
+auth = "none"

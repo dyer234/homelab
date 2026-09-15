@@ -1,6 +1,8 @@
 # Most tiles are auto-discovered via homepage.* Docker labels on each container.
-# Static entries here are for things that are NOT containers on this host.
-# Groups merge with label-discovered ones, so "Automation" lands next to Jenkins.
+# Static entries here are for things that are NOT containers on this host, or a
+# second card on a container that already has one (labels allow one per
+# container). Groups merge with label-discovered ones, so "Automation" lands
+# next to Jenkins and "Network" next to Tailscale.
 
 - Automation:
     # The DigitalOcean build droplet from infra/ci-agent. Homepage cannot reach
@@ -36,3 +38,27 @@
                   to: Idle
                 - value: false
                   to: Building
+
+- Network:
+    # The wg-easy container already has a label card (the admin panel). This is
+    # the *server* it runs: is anyone actually getting through UDP 51820?
+    # "Connected" counts peers with a handshake inside `threshold` minutes, so
+    # 0 connected with a total > 0 while someone should be on it means the
+    # endpoint is unreachable (on the Mac, likely: no host networking, and
+    # WG_HOST must resolve from the outside). The container pill only says
+    # the process is alive.
+    - WireGuard Server:
+        icon: wireguard.png
+        href: https://vpn.{{HOMEPAGE_VAR_DOMAIN}}
+        description: "Endpoint {{HOMEPAGE_VAR_WG_HOST}}:51820/udp"
+        server: my-docker
+        container: wireguard-external
+        widget:
+          type: wgeasy
+          # Container-to-container over traefik-public; no Traefik/TLS hop.
+          url: http://wireguard-external:51821
+          # wg-easy v14 API: plaintext password, no username. Bump to
+          # version: 2 + username when the image moves to v15.
+          password: "{{HOMEPAGE_VAR_WGEASY_PASSWORD}}"
+          threshold: 3
+          fields: ["connected", "enabled", "total"]

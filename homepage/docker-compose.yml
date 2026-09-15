@@ -9,6 +9,8 @@ services:
       - HOMEPAGE_VAR_DOMAIN=${DOMAIN}
       - HOMEPAGE_VAR_JENKINS_USER=${JENKINS_API_USER}
       - HOMEPAGE_VAR_JENKINS_TOKEN=${JENKINS_API_TOKEN}
+      - HOMEPAGE_VAR_WG_HOST=${WG_HOST}
+      - HOMEPAGE_VAR_WGEASY_PASSWORD=${WGEASY_PASSWORD}
     volumes:
       - ./config:/app/config
       - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -120,20 +120,43 @@ services:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
     labels:
-      # qBittorrent routes through gluetun's network,
-      # so Traefik labels for qbit go HERE
+      # qBittorrent routes through gluetun's network, so the Traefik labels
+      # for qbit go HERE (Traefik needs the container that owns the IP). The
+      # homepage.* labels for qbit live on the qbittorrent service instead:
+      # Homepage reads labels through the Docker socket, not the network, and
+      # it allows one card per container — this container's card is the VPN.
       - "traefik.enable=true"
       - "traefik.http.routers.qbittorrent.rule=Host(`qbit.${DOMAIN}`)"
       - "traefik.http.routers.qbittorrent.entrypoints=websecure"
       - "traefik.http.routers.qbittorrent.tls.certresolver=letsencrypt"
       - "traefik.http.services.qbittorrent.loadbalancer.server.port=8181"
-      - "homepage.group=Downloads"
-      - "homepage.name=qBittorrent"
-      - "homepage.icon=qbittorrent.png"
-      - "homepage.href=https://qbit.${DOMAIN}"
-      - "homepage.description=Torrent Client"
-      - "homepage.widget.type=qbittorrent"
-      - "homepage.widget.url=http://gluetun:8181"
+      # Dashboard card for the tunnel itself. Two widgets:
+      #   [0] Homepage's native gluetun widget hits the control server for the
+      #       exit's public IP / region / country. It only succeeds when the
+      #       tunnel is actually passing traffic, so a populated IP IS the
+      #       health signal; a failing tunnel shows an API error instead.
+      #       (Route access is granted in gluetun/auth/config.toml.)
+      #   [1] Restart counts from the gluetun-stats sidecar below, because a
+      #       tunnel that reconnects every 11 seconds looks "up" to [0].
+      - "homepage.group=Network"
+      - "homepage.name=VPN (Gluetun)"
+      - "homepage.icon=gluetun.png"
+      - "homepage.description=ProtonVPN WireGuard tunnel for qBittorrent"
+      - "homepage.widgets[0].type=gluetun"
+      - "homepage.widgets[0].url=http://gluetun:8000"
+      - "homepage.widgets[0].version=2"
+      - "homepage.widgets[1].type=customapi"
+      - "homepage.widgets[1].url=http://gluetun-stats:8080/"
+      - "homepage.widgets[1].refreshInterval=60000"
+      - "homepage.widgets[1].mappings[0].field=restarts_1h"
+      - "homepage.widgets[1].mappings[0].label=Restarts (1h)"
+      - "homepage.widgets[1].mappings[0].format=number"
+      - "homepage.widgets[1].mappings[1].field=restarts_24h"
+      - "homepage.widgets[1].mappings[1].label=Restarts (24h)"
+      - "homepage.widgets[1].mappings[1].format=number"
+      - "homepage.widgets[1].mappings[2].field=last_restart"
+      - "homepage.widgets[1].mappings[2].label=Last restart"
+      - "homepage.widgets[1].mappings[2].format=text"
     cap_add:
       - NET_ADMIN
     environment:
@@ -157,10 +180,43 @@ services:
       - "8181:8181/tcp"
       - "6882:6881/tcp"
       - "6882:6881/udp"
+    volumes:
+      # Control-server roles; see the file for why the routes are auth-less.
+      - ./gluetun/auth/config.toml:/gluetun/auth/config.toml:ro
+    # gluetun's own healthcheck: asks its internal health server (127.0.0.1:9999)
+    # whether the last TCP dial *through the tunnel* succeeded — i.e. exactly
+    # "is the VPN passing traffic". Homepage shows it as the card's status pill.
+    #
+    # INFORMATIONAL ONLY. Nothing may act on it: no autoheal label here and no
+    # `condition: service_healthy` on qbittorrent. Both existed once (see commit
+    # 7b16f7f) and recreating gluetun leaves qbittorrent, which shares its
+    # network namespace, permanently without a network until it is recreated
+    # too. That trap is why the healthcheck was disabled outright rather than
+    # just detached; detached is enough.
     healthcheck:
-      disable: true
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     networks:
       - media_net
+      - traefik-public
+    restart: unless-stopped
+
+  # Counts "restarting VPN" lines in gluetun's log over the last 1h / 24h for
+  # the VPN card's second widget. Read-only Docker socket; stdlib-only script.
+  gluetun-stats:
+    image: python:3.13-alpine
+    container_name: gluetun-stats
+    command: ["python", "/app/gluetun-stats.py"]
+    environment:
+      - GLUETUN_CONTAINER=gluetun
+    volumes:
+      - ./scripts/gluetun-stats.py:/app/gluetun-stats.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      # Only Homepage talks to it, and Homepage is on traefik-public.
       - traefik-public
     restart: unless-stopped
 
@@ -169,6 +225,16 @@ services:
     container_name: qbittorrent
     labels:
       - "autoheal=true"
+      # Dashboard card. Traefik labels for this service are on gluetun (see
+      # there); these can live here because Homepage discovers via the Docker
+      # socket, and this way the card's status pill is qbittorrent's own.
+      - "homepage.group=Downloads"
+      - "homepage.name=qBittorrent"
+      - "homepage.icon=qbittorrent.png"
+      - "homepage.href=https://qbit.${DOMAIN}"
+      - "homepage.description=Torrent Client"
+      - "homepage.widget.type=qbittorrent"
+      - "homepage.widget.url=http://gluetun:8181"
     network_mode: "service:gluetun"
     depends_on:
       - gluetun

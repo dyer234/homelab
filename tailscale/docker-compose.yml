@@ -63,6 +63,10 @@ services:
       # so it cannot live in TS_EXTRA_ARGS. Not 41641: the host's own
       # Tailscale already owns that.
       - TS_TAILSCALED_EXTRA_ARGS=--port=41642
+      # Put the LocalAPI socket on the shared volume below (the image default
+      # is /tmp/tailscaled.sock with a symlink here, and a symlink is useless
+      # across containers). tailnet-status reads peer state through it.
+      - TS_SOCKET=/var/run/tailscale/tailscaled.sock
     ports:
       # Must also be forwarded on the home router (UDP 41642 -> this host).
       - "41642:41642/udp"
@@ -71,6 +75,7 @@ services:
       # a NEW node on every recreate, and the old one lingers holding the
       # hostname — which is how you end up with homelab-1, -2, -3.
       - ./state:/var/lib/tailscale
+      - tailscale-sock:/var/run/tailscale
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -92,9 +97,40 @@ services:
       - "homepage.name=Tailscale"
       - "homepage.icon=tailscale.png"
       - "homepage.description=Tailnet subnet router for the Docker network"
+      # Lists the other machines on the tailnet with Online/Offline, from the
+      # tailnet-status sidecar below. dynamic-list renders one row per item.
+      - "homepage.widget.type=customapi"
+      - "homepage.widget.url=http://tailnet-status:8080/"
+      - "homepage.widget.refreshInterval=30000"
+      - "homepage.widget.display=dynamic-list"
+      - "homepage.widget.mappings.name=name"
+      - "homepage.widget.mappings.label=status"
+      - "homepage.widget.mappings.limit=10"
     networks:
       - traefik-public
     restart: unless-stopped
+
+  # Serves the tailnet's machine list (name + Online/Offline) for the card
+  # above by asking tailscaled over its LocalAPI socket. No API key needed:
+  # the node already knows its peers. Stdlib-only script, stock image.
+  tailnet-status:
+    image: python:3.13-alpine
+    container_name: tailnet-status
+    command: ["python", "/app/tailnet-status.py"]
+    volumes:
+      - ./scripts/tailnet-status.py:/app/tailnet-status.py:ro
+      # Not :ro — connect(2) on a unix socket needs write permission on it.
+      - tailscale-sock:/var/run/tailscale
+    depends_on:
+      - tailscale
+    networks:
+      # Only Homepage talks to it, and Homepage is on traefik-public.
+      - traefik-public
+    restart: unless-stopped
+
+volumes:
+  # tailscaled's LocalAPI socket, shared with tailnet-status.
+  tailscale-sock:
 
 networks:
   traefik-public:

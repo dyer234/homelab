@@ -32,7 +32,7 @@ services:
       - "homepage.name=WireGuard"
       - "homepage.icon=wireguard"
       - "homepage.href=https://vpn.${DOMAIN}"
-      - "homepage.description=VPN Server"
+      - "homepage.description=VPN Server Admin Panel"
     networks:
       - traefik-public
     restart: unless-stopped
