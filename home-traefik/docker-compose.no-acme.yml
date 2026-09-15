@@ -11,9 +11,13 @@ services:
       - "--providers.docker.network=traefik-public"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # TLS for every router on websecure, served from the certificate store
+      # by SNI. Routers therefore need no tls/certresolver labels of their own;
+      # the one request that fills the store is the wildcard on the dashboard
+      # router below (docker-compose.yml). A per-router certresolver label
+      # would make Traefik request a separate per-host certificate — don't.
+      - "--entrypoints.websecure.http.tls=true"
       - "--entrypoints.redis.address=:6379"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--api.dashboard=true"
-    labels:
-      - "traefik.http.routers.traefik-dashboard.tls=true"

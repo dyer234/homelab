@@ -25,7 +25,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.wireguard.rule=Host(`vpn.${DOMAIN}`)"
       - "traefik.http.routers.wireguard.entrypoints=websecure"
-      - "traefik.http.routers.wireguard.tls.certresolver=letsencrypt"
       - "traefik.http.services.wireguard.loadbalancer.server.port=51821"
       # Homepage integration
       - "homepage.group=Network"

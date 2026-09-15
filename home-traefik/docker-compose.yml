@@ -11,6 +11,12 @@ services:
       - "--providers.docker.network=traefik-public"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # TLS for every router on websecure, served from the certificate store
+      # by SNI. Routers therefore need no tls/certresolver labels of their own;
+      # the one request that fills the store is the wildcard on the dashboard
+      # router below (docker-compose.yml). A per-router certresolver label
+      # would make Traefik request a separate per-host certificate — don't.
+      - "--entrypoints.websecure.http.tls=true"
       - "--entrypoints.redis.address=:6379"
       # Redirect HTTP -> HTTPS
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
@@ -19,8 +25,19 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=digitalocean"
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+      # DigitalOcean's three nameservers take minutes to agree on a new TXT
+      # record (and SERVFAIL meanwhile), so Traefik's own "visible on every
+      # authoritative NS" pre-check times out. Skip it and just wait a fixed
+      # interval; Let's Encrypt does its own lookup with retries.
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.disablepropagationcheck=true"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.delaybeforecheck=120"
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      # ACME_CASERVER / ACME_STORAGE default to production; homelab.local.env
+      # can point them at Let's Encrypt staging (and a separate store, since
+      # an account registered with one CA is not valid at the other) to test
+      # issuance without burning production rate limits.
+      - "--certificatesresolvers.letsencrypt.acme.caserver=${ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/${ACME_STORAGE:-acme.json}"
       # Dashboard
       - "--api.dashboard=true"
       #- "--log.level=DEBUG"
@@ -39,11 +56,44 @@ services:
       - "traefik.http.routers.traefik-dashboard.rule=Host(`${DOMAIN}`) && PathPrefix(`/traefik`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.tls.certresolver=letsencrypt"
+      # One wildcard for the whole domain, requested by this router. Every
+      # other router's Host() is covered by it, so Traefik skips per-host
+      # requests — one DNS-01 challenge instead of one per service.
+      - "traefik.http.routers.traefik-dashboard.tls.domains[0].main=${DOMAIN}"
+      - "traefik.http.routers.traefik-dashboard.tls.domains[0].sans=*.${DOMAIN}"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       # Strip /traefik prefix before passing to the API
       - "traefik.http.routers.traefik-dashboard.middlewares=traefik-strip"
       - "traefik.http.middlewares.traefik-strip.stripprefix.prefixes=/traefik"
     networks:
+      - traefik-public
+    restart: unless-stopped
+
+  # Serves the certificate list (name + expiry) for the Let's Encrypt card on
+  # Homepage by reading the ACME stores above. Stdlib-only script, stock image;
+  # same pattern as tailscale/scripts/tailnet-status.py.
+  acme-status:
+    image: python:3.13-alpine
+    container_name: acme-status
+    command: ["python", "/app/acme-status.py"]
+    volumes:
+      - ./scripts/acme-status.py:/app/acme-status.py:ro
+      - ./letsencrypt:/letsencrypt:ro
+    labels:
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Let's Encrypt"
+      - "homepage.icon=lets-encrypt.png"
+      - "homepage.href=https://${DOMAIN}/traefik/dashboard/#/http/routers"
+      - "homepage.description=Certificates held by Traefik"
+      - "homepage.widget.type=customapi"
+      - "homepage.widget.url=http://acme-status:8080/"
+      - "homepage.widget.refreshInterval=300000"
+      - "homepage.widget.display=dynamic-list"
+      - "homepage.widget.mappings.name=name"
+      - "homepage.widget.mappings.label=status"
+      - "homepage.widget.mappings.limit=10"
+    networks:
+      # Only Homepage talks to it, and Homepage is on traefik-public.
       - traefik-public
     restart: unless-stopped
 

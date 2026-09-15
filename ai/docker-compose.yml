@@ -8,7 +8,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.openwebui.rule=Host(`ai.${DOMAIN}`)"
       - "traefik.http.routers.openwebui.entrypoints=websecure"
-      - "traefik.http.routers.openwebui.tls.certresolver=letsencrypt"
       - "traefik.http.services.openwebui.loadbalancer.server.port=8080"
       - "homepage.group=AI"
       - "homepage.name=Open WebUI"

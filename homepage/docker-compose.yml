@@ -18,7 +18,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.homepage.rule=Host(`dashboard.${DOMAIN}`)"
       - "traefik.http.routers.homepage.entrypoints=websecure"
-      - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
       - "traefik.http.services.homepage.loadbalancer.server.port=3000"
       # Ensure proper HTTPS headers to prevent mixed content warnings
       - "traefik.http.routers.homepage.middlewares=homepage-headers"

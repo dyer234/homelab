@@ -27,3 +27,4 @@ redis/data
 jenkins/jobs
 jenkins/stashed-users
 homelab.local.env
+home-traefik/scripts/__pycache__
