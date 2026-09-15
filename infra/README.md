@@ -20,8 +20,9 @@ no arguments for the target list. Targets that need variables run under `op run`
 `make fmt`, `make validate` and `make init` call tofu directly, so they never
 prompt for credentials they do not read.
 
-Non-secret inputs (`agent_name`, `ssh_key_names`, `region`, ...) stay in
-`terraform.tfvars`, which remains gitignored.
+Non-secret inputs (`agent_count`, `agent_labels`, `ssh_key_names`, ...) sit in
+the same `1pass.env` under `# --- non-secrets ---`, so one file describes a
+module; `terraform.tfvars` (gitignored) still works for anything host-specific.
 
 ### Creating the item
 
@@ -33,7 +34,6 @@ op item create --category "Secure Note" --vault projects --title homelab \
   "do_token[password]=dop_v1_..." \
   "tailscale_auth_key_ci_agent[password]=tskey-auth-..." \
   "tailscale_auth_key_docker_subnet[password]=tskey-auth-..." \
-  "jenkins_agent_secret[password]=..." \
   "jenkins_api_token[password]=..."
 ```
 
@@ -117,10 +117,14 @@ Provisions a DigitalOcean droplet that joins the tailnet and registers itself as
 a Jenkins build agent, with Docker, so the homelab can build **linux/amd64**
 images — the host is arm64 and cannot do that natively.
 
-Currently a **persistent** agent: one long-lived droplet. The ephemeral
-per-build design (`ephemeral = true` on the tailnet key, droplet created and
-destroyed inside the build) is the intended next step; `main.tf` marks the two
-places that change.
+Persistent agents: `TF_VAR_agent_count` long-lived droplets named
+`cloud-agent-amd64-1 .. -N`, each with a matching Jenkins node that tofu creates
+(and deletes) through the Jenkins API via `scripts/jenkins_node.py`. The node's
+JNLP secret is read back from Jenkins into the droplet's cloud-init; nothing is
+copied by hand. **Count and labels are edited in `1pass.env`**, then `make apply`:
+growing adds droplet+node pairs, shrinking removes the highest-numbered ones,
+and a label change is pushed to the existing nodes without touching droplets.
+`make nodes` shows Jenkins' view (online/idle/labels) of the fleet.
 
 ### Order of operations
 
@@ -142,12 +146,12 @@ until the console policy declares it in `tagOwners`.
    approved.
 4. **Rebuild Jenkins** so it has plugins and `tofu`, and picks up its static IP:
    `cd jenkins && docker compose up -d --build`.
-5. **Create the Jenkins node**: Manage Jenkins → Nodes → New Node, name it to
-   match `var.agent_name`, launch method "Launch agent by connecting it to the
-   controller". Copy the secret it shows you.
-6. Put that secret in the 1Password item as `jenkins_agent_secret`, generate a
-   reusable auth key tagged `tag:ci-agent` as `tailscale_auth_key_ci_agent`,
-   then `cd infra/ci-agent && make apply`.
+5. **Jenkins API token** for the `admin` user (User → Security → API Token)
+   stored as `jenkins_api_token` — the same field the Homepage dashboard uses.
+   Tofu uses it to create the nodes; there is nothing to create by hand.
+6. Generate a reusable auth key tagged `tag:ci-agent` as
+   `tailscale_auth_key_ci_agent`, set `TF_VAR_agent_count` in `1pass.env`, then
+   `cd infra/ci-agent && make apply`.
 
 ### Variables
 
@@ -155,9 +159,10 @@ until the console policy declares it in `tagOwners`.
 |---|---|
 | `do_token` | DigitalOcean API token |
 | `tailscale_auth_key` | Pre-minted, reusable auth key tagged `tag:ci-agent` |
-| `jenkins_url` | Jenkins on the Docker network (default `http://172.23.255.10:8080`) |
-| `agent_name` | Jenkins node name; must match exactly (default `cloud-amd64`) |
-| `jenkins_agent_secret` | JNLP secret from the Jenkins node |
+| `jenkins_url` | Jenkins as the *agents* reach it, over the tailnet (default `http://172.23.255.10:8080`) |
+| `agent_count` / `agent_labels` / `agent_executors` | The fleet; set in `1pass.env` |
+| `agent_name_prefix` | Node and hostname prefix (default `cloud-agent-amd64`) |
+| `TF_VAR_jenkins_admin_url` / `_api_user` / `_api_token` | Jenkins as *tofu* reaches it plus the admin token; env-only, read by `scripts/jenkins_node.py`, never in state |
 | `region` / `size` / `image` | Droplet shape (defaults `nyc3` / `s-2vcpu-4gb` / `ubuntu-24-04-x64`) |
 | `ssh_key_names` | Optional DO SSH keys; Tailscale SSH is the primary path |
 

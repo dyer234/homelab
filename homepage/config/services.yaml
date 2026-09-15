@@ -4,40 +4,8 @@
 # container). Groups merge with label-discovered ones, so "Automation" lands
 # next to Jenkins and "Network" next to Tailscale.
 
-- Automation:
-    # The DigitalOcean build droplet from infra/ci-agent. Homepage cannot reach
-    # it directly (containers have no route onto the tailnet), and a droplet
-    # that is up but not connected to the controller is not healthy anyway, so
-    # ask Jenkins. The node name must match TF_VAR_agent_name in
-    # infra/ci-agent/1pass.env and jenkins/data/nodes/.
-    - CI Agent (cloud-linux-amd64-1):
-        icon: digital-ocean.png
-        href: https://jenkins.{{HOMEPAGE_VAR_DOMAIN}}/computer/cloud-linux-amd64-1/
-        description: Cloud build agent, over Tailscale
-        widget:
-          type: customapi
-          # Container-to-container over traefik-public; no Traefik/TLS hop.
-          url: http://jenkins:8080/computer/cloud-linux-amd64-1/api/json?tree=offline,idle
-          username: "{{HOMEPAGE_VAR_JENKINS_USER}}"
-          password: "{{HOMEPAGE_VAR_JENKINS_TOKEN}}"
-          refreshInterval: 30000
-          mappings:
-            - field: offline
-              label: Status
-              format: text
-              remap:
-                - value: false
-                  to: Online
-                - value: true
-                  to: Offline
-            - field: idle
-              label: Executor
-              format: text
-              remap:
-                - value: true
-                  to: Idle
-                - value: false
-                  to: Building
+# CI agents are a label card on jenkins/ (the jenkins-agents sidecar), which
+# lists every node infra/ci-agent creates, so nothing static is needed here.
 
 - Network:
     # The wg-easy container already has a label card (the admin panel). This is

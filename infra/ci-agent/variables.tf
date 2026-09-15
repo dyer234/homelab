@@ -23,26 +23,39 @@ variable "tailscale_auth_key" {
   sensitive   = true
 }
 
-variable "agent_name" {
-  description = "Jenkins node name. Must match the node created in Jenkins exactly — the JNLP handshake is rejected otherwise."
-  type        = string
-  default     = "cloud-amd64"
+
+
+# --- the fleet: set these in 1pass.env (TF_VAR_agent_count etc.), not here ---
+
+variable "agent_count" {
+  description = "How many agents to run. Names are <agent_name_prefix>-1 .. -N; shrinking removes the highest numbers."
+  type        = number
+  default     = 1
 }
 
-variable "jenkins_agent_secret" {
-  description = <<-DESC
-    JNLP secret for the Jenkins node named var.agent_name. Jenkins mints this when
-    the node is created (Manage Jenkins > Nodes > the node > it is shown in the
-    connection command).
-
-    This lands in the droplet's user_data, which is readable through the DO API
-    for the life of the droplet, and unlike the tailnet key it stays valid as
-    long as the Jenkins node object exists. Deleting the node in Jenkins is what
-    actually revokes it.
-  DESC
+variable "agent_labels" {
+  description = "Space-separated Jenkins labels every agent gets. Pipelines select agents with `agent { label '...' }`."
   type        = string
-  sensitive   = true
+  default     = "linux docker amd64"
 }
+
+variable "agent_executors" {
+  description = "Concurrent builds per agent."
+  type        = number
+  default     = 1
+}
+
+variable "agent_name_prefix" {
+  description = "Jenkins node name and tailnet hostname prefix; the agent number is appended."
+  type        = string
+  default     = "cloud-agent-amd64"
+}
+
+# Jenkins nodes are created and deleted by scripts/jenkins_node.py, which reads
+# TF_VAR_jenkins_admin_url, TF_VAR_jenkins_api_user and TF_VAR_jenkins_api_token
+# straight from the environment (see 1pass.env). They are not declared as
+# variables on purpose: values a data source is given are written to
+# terraform.tfstate, and an admin API token should not be.
 
 variable "jenkins_url" {
   description = <<-DESC

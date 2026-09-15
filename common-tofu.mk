@@ -11,6 +11,12 @@
 OP   ?= op run --env-file=1pass.env --
 TOFU ?= tofu
 
+# Root domain, resolved the way the compose launchers do it (homelab.local.env
+# over homelab.env), exported so scripts run under $(OP) can address homelab
+# services by name — e.g. ci-agent/scripts/jenkins_node.py -> https://jenkins.$DOMAIN.
+DOMAIN ?= $(shell sed -n 's/^DOMAIN=//p' ../../homelab.local.env ../../homelab.env 2>/dev/null | head -1)
+export DOMAIN
+
 .DEFAULT_GOAL := help
 .PHONY: help init fmt validate plan apply destroy refresh output console
 

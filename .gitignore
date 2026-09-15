@@ -2,7 +2,6 @@
 media-streaming/config
 home-traefik/letsencrypt
 homepage/config/logs
-homepage/config/custom.css
 homepage/config/custom.js
 homepage/config/kubernetes.yaml
 homepage/config/proxmox.yaml
@@ -28,3 +27,4 @@ jenkins/jobs
 jenkins/stashed-users
 homelab.local.env
 home-traefik/scripts/__pycache__
+infra/ci-agent/scripts/__pycache__

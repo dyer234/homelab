@@ -1,0 +1,7 @@
+/* With no entries in widgets.yaml Homepage still renders the top widget bar,
+ * whose only visible part is then its bottom border: a stray rule across the
+ * page. Hide the bar while its left and right halves hold no widget, so adding
+ * a widget (clock, weather...) brings it back without touching this. */
+#information-widgets:not(:has(#information-widgets-left > *)):not(:has(#information-widgets-right > *)) {
+  display: none;
+}

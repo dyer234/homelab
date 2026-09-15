@@ -33,6 +33,39 @@ services:
         ipv4_address: ${NET_PREFIX}.255.10
     restart: unless-stopped
 
+  # Serves the agent list (name + online/idle) for the CI Agents card on
+  # Homepage by asking the controller's API. Agents are created by
+  # infra/ci-agent, so the card follows TF_VAR_agent_count automatically.
+  # Stdlib-only script, stock image; same pattern as tailscale/scripts.
+  jenkins-agents:
+    image: python:3.13-alpine
+    container_name: jenkins-agents
+    command: ["python", "/app/agents-status.py"]
+    environment:
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_API_USER=${JENKINS_API_USER}
+      - JENKINS_API_TOKEN=${JENKINS_API_TOKEN}
+    volumes:
+      - ./scripts/agents-status.py:/app/agents-status.py:ro
+    depends_on:
+      - jenkins
+    labels:
+      - "homepage.group=Automation"
+      - "homepage.name=CI Agents"
+      - "homepage.icon=digital-ocean.png"
+      - "homepage.href=https://jenkins.${DOMAIN}/computer/"
+      - "homepage.description=Cloud build agents (infra/ci-agent), over Tailscale"
+      - "homepage.widget.type=customapi"
+      - "homepage.widget.url=http://jenkins-agents:8080/"
+      - "homepage.widget.refreshInterval=30000"
+      - "homepage.widget.display=dynamic-list"
+      - "homepage.widget.mappings.name=name"
+      - "homepage.widget.mappings.label=status"
+      - "homepage.widget.mappings.limit=10"
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
 networks:
   traefik-public:
     external: true
