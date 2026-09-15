@@ -9,7 +9,9 @@ services:
     environment:
       - DO_TOKEN=${DO_TOKEN}
       - DOMAIN=${DOMAIN}
-      - RECORD_NAMES=${RECORD_NAMES:-@,*}
+      # Deliberately no default: a host that has not declared which records it
+      # owns (homelab.env / homelab.local.env) must not touch the zone at all.
+      - RECORD_NAMES=${RECORD_NAMES:?set RECORD_NAMES in homelab.env or homelab.local.env}
       - INTERVAL=${INTERVAL:-300}
     volumes:
       - ./update-dns.sh:/usr/local/bin/update-dns.sh:ro

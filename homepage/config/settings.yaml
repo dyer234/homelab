@@ -19,3 +19,9 @@ layout:
     # The Tailscale machine list is tall; without this the short WireGuard
     # cards leave holes in the grid.
     useEqualHeights: true
+  Automation:
+    style: row
+    columns: 2
+  Infrastructure:
+    style: row
+    columns: 2

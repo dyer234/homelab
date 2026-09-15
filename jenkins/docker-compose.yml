@@ -27,10 +27,11 @@ services:
     networks:
       traefik-public:
         # Static, because the build agents target this address by value. Docker
-        # hands out dynamic IPs from the bottom of 172.23.0.0/16, so a high
-        # address will not be allocated out from under us. Changing it means
-        # changing infra/ci-agent's jenkins_url to match.
-        ipv4_address: 172.23.255.10
+        # hands out dynamic IPs from the bottom of the /16, so a high address
+        # will not be allocated out from under us. NET_PREFIX is the subnet
+        # home-traefik pins on traefik-public; infra/ci-agent's jenkins_url
+        # must match the server's value.
+        ipv4_address: ${NET_PREFIX}.255.10
     restart: unless-stopped
 
 networks:

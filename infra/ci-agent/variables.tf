@@ -54,7 +54,9 @@ variable "jenkins_url" {
     survive the move back to the Linux host unchanged, and what keeps it working
     when the host's own Tailscale is not running.
 
-    Must match the static ipv4_address in jenkins/docker-compose.yml.
+    Must match the static ipv4_address in jenkins/docker-compose.yml, i.e.
+    <NET_PREFIX>.255.10 with NET_PREFIX from the SERVER's homelab.env. Tofu does
+    not read those env files; a different prefix means passing this explicitly.
   DESC
   type        = string
   default     = "http://172.23.255.10:8080"

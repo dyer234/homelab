@@ -50,3 +50,10 @@ services:
 networks:
   traefik-public:
     name: traefik-public
+    # Pinned: jenkins' static IP, the tailscale route and infra/ci-agent's
+    # jenkins_url all assume this range, and Docker would otherwise hand out
+    # whatever pool is free on the host. To change it on a live host the
+    # network must be recreated (every stack off it first).
+    ipam:
+      config:
+        - subnet: ${NET_PREFIX}.0.0/16

@@ -17,15 +17,7 @@ for app in $(get_apps); do
   if [ "${NO_ACME:-}" = "true" ] && [ -f "$HOMELAB_DIR/$app/docker-compose.no-acme.yml" ]; then
     compose_files="$compose_files -f docker-compose.no-acme.yml"
   fi
-  # Env files, lowest to highest precedence (see homelab.env for the why).
-  # Compose stops auto-loading .env once given any --env-file, hence the third.
-  env_files=(--env-file "$HOMELAB_DIR/homelab.env")
-  if [ -f "$HOMELAB_DIR/homelab.local.env" ]; then
-    env_files+=(--env-file "$HOMELAB_DIR/homelab.local.env")
-  fi
-  if [ -f "$HOMELAB_DIR/$app/.env" ]; then
-    env_files+=(--env-file .env)
-  fi
+  env_files=($(compose_env_files "$app"))
   # Apps whose secrets live in 1Password carry a committed 1pass.env of op://
   # references; run compose under `op run` so they resolve into the environment
   # (compose reads ${VAR} from the process env, which beats every env file).
