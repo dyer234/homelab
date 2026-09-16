@@ -1,0 +1,92 @@
+// Tailnet policy for the HOMELAB tailnet.
+//
+// MANAGED BY OPENTOFU - infra/tailscale. Edits made in the admin console are
+// overwritten by the next `make apply`. Change policy.hujson.tftpl instead.
+//
+// This tailnet holds the homelab and nothing else. Work machines (the Ohio
+// exit node and its client) live on a SEPARATE tailnet under a different
+// account, deliberately: a mistake here cannot reach them, which is the whole
+// reason policy is automated here and was left hand-maintained before.
+{
+  // EVERY TAG OWNS ITSELF, and that is load-bearing. Both the subnet router and
+  // infra/ci-agent register with OAuth clients, and an OAuth client is its OWN
+  // identity, not a user -- so listing only autogroup:admin does not make the
+  // client an owner and every key request is rejected with
+  //   400 "requested tags [tag:...] are invalid or not permitted"
+  // which reads like the tag is missing when it is present but owned by
+  // somebody else.
+  "tagOwners": {
+    "tag:homelab":  ["autogroup:admin", "tag:homelab"],
+    "tag:ci-agent": ["autogroup:admin", "tag:ci-agent"]
+  },
+
+  "autoApprovers": {
+    "routes": {
+      // The SUPERNET, so any NET_PREFIX chosen in homelab.env qualifies without
+      // a policy edit, and so do the /32 host routes the subnet routers
+      // actually advertise (an autoApprover covers every subset of its range).
+      // A route that is not covered here is advertised and then waits forever
+      // for an approval nobody knows to click.
+      "${route_supernet}": ["tag:homelab"]
+    }
+  },
+
+  "acls": [
+    // Your own devices reach everything on THIS tailnet.
+    {
+      "action": "accept",
+      "src":    ["autogroup:member"],
+      "dst":    ["*:*"]
+    },
+
+    // Exit nodes. NOT redundant with "*:*" above: traffic leaving through an
+    // exit node is destined for autogroup:internet, and the "*" wildcard covers
+    // tailnet destinations ONLY. Nothing on this tailnet offers an exit node
+    // today, so this rule is inert -- it is here so that turning one on later
+    // does not silently fail to route with no error anywhere.
+    {
+      "action": "accept",
+      "src":    ["autogroup:member"],
+      "dst":    ["autogroup:internet:*"]
+    },
+
+    // Subnet routers and the homelab host itself.
+    {
+      "action": "accept",
+      "src":    ["tag:homelab"],
+      "dst":    ["*:*"]
+    },
+
+    // Build agents reach Jenkins controllers and nothing else.
+    //
+    // Defence in depth rather than the only control: each stack's subnet router
+    // advertises a /32 for its controller alone, so an agent has no ROUTE to
+    // anything else on the Docker network even if this rule were widened. Both
+    // layers have to be wrong before a build can reach Sonarr or the NAS.
+    //
+    // ${jenkins_ports}: 8080 is the web/API port the agent uses for discovery,
+    // 50000 the JNLP port it connects back on. An inbound agent needs both.
+    {
+      "action": "accept",
+      "src":    ["tag:ci-agent"],
+      "dst":    [
+%{ for ip in jenkins_controllers ~}
+        "${ip}:${jenkins_ports}",
+%{ endfor ~}
+      ]
+    }
+  ],
+
+  "ssh": [
+    // Debugging access into the agents. Without this block Tailscale SSH is
+    // off and a failed cloud-init is unreachable over the tailnet; the DO
+    // console falls through to a password prompt nobody has, leaving only the
+    // droplet's public IP and the key in ssh_key_names.
+    {
+      "action": "accept",
+      "src":    ["autogroup:member"],
+      "dst":    ["tag:ci-agent"],
+      "users":  ["root", "autogroup:nonroot"]
+    }
+  ]
+}

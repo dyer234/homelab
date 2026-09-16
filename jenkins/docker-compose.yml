@@ -30,7 +30,7 @@ services:
         # will not be allocated out from under us. NET_PREFIX is the subnet
         # home-traefik pins on traefik-public; infra/ci-agent's jenkins_url
         # must match the server's value.
-        ipv4_address: ${NET_PREFIX}.255.10
+        ipv4_address: ${NET_PREFIX}.${JENKINS_HOST_SUFFIX:-255.10}
     restart: unless-stopped
 
   # Serves the agent list (name + online/idle) for the CI Agents card on

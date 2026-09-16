@@ -10,5 +10,9 @@ terraform {
       source  = "hashicorp/external"
       version = "~> 2.3"
     }
+    tailscale = {
+      source  = "tailscale/tailscale"
+      version = "~> 0.29"
+    }
   }
 }

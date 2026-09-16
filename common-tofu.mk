@@ -17,6 +17,18 @@ TOFU ?= tofu
 DOMAIN ?= $(shell sed -n 's/^DOMAIN=//p' ../../homelab.local.env ../../homelab.env 2>/dev/null | head -1)
 export DOMAIN
 
+# The Docker network this host pins and the Jenkins controller's address on it,
+# resolved the same way and exported as TF_VAR_ so the modules derive addresses
+# instead of repeating them. Without this, NET_PREFIX lives in homelab.env for
+# compose and as a hardcoded literal in every .tf file, and they drift the first
+# time a host picks a different /16.
+NET_PREFIX ?= $(shell sed -n 's/^NET_PREFIX=//p' ../../homelab.local.env ../../homelab.env 2>/dev/null | head -1)
+JENKINS_HOST_SUFFIX ?= $(shell sed -n 's/^JENKINS_HOST_SUFFIX=//p' ../../homelab.local.env ../../homelab.env 2>/dev/null | head -1)
+export NET_PREFIX JENKINS_HOST_SUFFIX
+TF_VAR_net_prefix ?= $(NET_PREFIX)
+TF_VAR_jenkins_host_suffix ?= $(JENKINS_HOST_SUFFIX)
+export TF_VAR_net_prefix TF_VAR_jenkins_host_suffix
+
 .DEFAULT_GOAL := help
 .PHONY: help init fmt validate plan apply destroy refresh output console
 

@@ -8,8 +8,13 @@
 #     host, this stack is unchanged — only the host-level Tailscale install goes
 #     away. Nothing downstream (ACLs, agent config) has to be rewritten.
 #
-# It advertises the traefik-public subnet rather than proxying a single service,
-# so every container is reachable by its network address. Deliberately NOT using
+# It advertises a /32 host route for the Jenkins controller alone, NOT the whole
+# traefik-public subnet. The only thing that has to cross the tailnet is a build
+# agent reaching Jenkins; everything else is reached over Traefik. See TS_ROUTES.
+#
+# This is the HOMELAB tailnet, a separate Tailscale account from the work tailnet
+# that holds the Ohio exit node. Its policy is managed by infra/tailscale.
+# Deliberately NOT using
 # `network_mode: service:` — that is the netns trap this repo already hit with
 # gluetun/qBittorrent, where recreating the network container leaves the
 # dependent container permanently broken.
@@ -24,21 +29,41 @@ services:
     # in ../homelab.local.env) so two hosts get distinct nodes and routes.
     hostname: ${TS_HOSTNAME}
     environment:
-      # A pre-minted, TAGGED device auth key (tskey-auth-...). The tag is baked
-      # into the key at creation, so no --advertise-tags is needed here — and no
-      # ?preauthorized=/?ephemeral= query params either. Those are only valid on
-      # an OAuth client secret, where Tailscale mints a key on the fly; appended
-      # to a real auth key they become part of the key string and invalidate it.
-      - TS_AUTHKEY=${TS_AUTHKEY}
+      # OAuth client secret for the HOMELAB tailnet (the separate account; the
+      # work tailnet with the Ohio exit node is not touched by this repo).
+      # containerboot exchanges it for a registration key at start-up.
+      #
+      # The query string is REQUIRED, and is valid only on an OAuth secret --
+      # pasted onto a tskey-auth- it becomes part of the key and invalidates it:
+      #   preauthorized=true   OAuth-minted keys default this to FALSE, which
+      #                        leaves the node unapproved and its route
+      #                        unadvertised, with nothing saying why
+      #   ephemeral=false      this node is long-lived; an ephemeral one is
+      #                        swept minutes after it goes offline
+      #
+      # Appended here so the 1Password field holds nothing but the secret. The
+      # secret embeds its own client ID, so this is ONE value, not a pair.
+      - "TS_AUTHKEY=${TS_OAUTH_SECRET}?preauthorized=true&ephemeral=false"
       - TS_HOSTNAME=${TS_HOSTNAME}
       - TS_STATE_DIR=/var/lib/tailscale
-      # Advertise the Docker network so tailnet peers can reach containers
-      # directly. The route is auto-approved by an autoApprovers rule keyed on
-      # tag:homelab, maintained by hand in the admin console (Access Controls);
-      # it should list the supernet 172.16.0.0/12 so any NET_PREFIX qualifies.
-      # If it is missing, the route sits unapproved until someone clicks
-      # Edit route settings on the machine.
-      - TS_ROUTES=${NET_PREFIX}.0.0/16
+      # Advertise ONLY the Jenkins controller, as a /32 host route.
+      #
+      # Not the whole ${NET_PREFIX}.0.0/16. The one thing that needs to cross
+      # the tailnet is a build agent reaching Jenkins, and a /32 means a
+      # compromised build has no ROUTE to Sonarr, Navidrome, Redis, n8n or the
+      # NAS -- not merely no permission. Routing is a great deal harder to
+      # misconfigure than an ACL, and the tag:ci-agent rule in infra/tailscale
+      # is then defence in depth rather than the only control.
+      #
+      # Reach other containers over Traefik (https://<service>.${DOMAIN}), or
+      # widen this to ${NET_PREFIX}.0.0/16 if you genuinely want the whole
+      # Docker network on the tailnet again.
+      #
+      # Auto-approved by the autoApprovers rule keyed on tag:homelab, which
+      # infra/tailscale sets to the 172.16.0.0/12 supernet -- an autoApprover
+      # covers every subset of its range, so the /32 qualifies. Without that,
+      # the route sits unapproved until someone clicks Edit route settings.
+      - TS_ROUTES=${NET_PREFIX}.${JENKINS_HOST_SUFFIX:-255.10}/32
       # Kernel networking. Userspace mode (the image default) CANNOT act as a
       # subnet router, so this is required, not an optimisation.
       - TS_USERSPACE=false
@@ -49,15 +74,18 @@ services:
       # Only log in once; without it a restart re-runs `tailscale up` and can
       # trip over an already-consumed single-use key.
       - TS_AUTH_ONCE=true
-      # Tag the node explicitly rather than relying on the auth key having been
-      # minted with tags. An untagged node is user-owned, and the autoApprovers
-      # rule in the admin console keys on tag:homelab — so an untagged router
-      # advertises its route and then waits forever for a manual approval that
-      # never comes. Declaring it here puts the tag in the repo instead of in
-      # however someone happened to generate the key.
+      # MANDATORY with an OAuth secret, not belt-and-braces as it was with a
+      # pre-tagged auth key. An OAuth client cannot mint an UNTAGGED key at all,
+      # so without this flag registration fails outright rather than quietly
+      # producing a user-owned node.
       #
-      # This MUST match the key's tags if the key has any, or registration is
-      # rejected outright. An untagged key is fine: you are a tagOwner for it.
+      # The tag must ALSO own itself in tagOwners (infra/tailscale sets this):
+      # an OAuth client is its own identity, not a user, so an admin-owned tag
+      # is not enough and the mint is rejected with
+      # "requested tags are invalid or not permitted".
+      #
+      # It is what autoApprovers keys on, so a mistagged router advertises its
+      # route and then waits forever for an approval nobody knows to click.
       - TS_EXTRA_ARGS=--advertise-tags=tag:homelab
       # Pin the WireGuard/disco UDP port so it can be published below and
       # port-forwarded on the router. Without this tailscaled picks a random
