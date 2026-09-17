@@ -12,9 +12,12 @@ Automated backups to Backblaze B2 using [rclone](https://rclone.org/).
 | `ai/open-webui/` | `<bucket>/ai/ai-<date>.tar.gz` |
 | `navidrome/config/` | `<bucket>/navidrome/navidrome-<date>.tar.gz` |
 | `jenkins/data/` | `<bucket>/jenkins/jenkins-<date>.tar.gz` |
-| `gluetun/.env` | `<bucket>/gluetun-env/gluetun-env-<date>.tar.gz` |
 
-Paths matching `exclude-filters.txt` (logs, caches, artwork, sqlite WAL files) are skipped.
+Paths matching `exclude-filters.txt` are skipped. The intent is config only,
+not regenerable data: logs, caches, artwork, sqlite WAL files, Emby metadata
+and transcode temp, Jenkins builds/workspaces/plugins/war, Open WebUI's
+vector index. Expect roughly 30 MB per daily set; if an archive is suddenly
+hundreds of MB, something regenerable has crept in.
 
 ## How it works
 

@@ -2,6 +2,7 @@
 **/logs/
 **/log/
 **/logs.db
+**/audit.log
 
 # Database temp files
 **/*.db-wal
@@ -27,6 +28,30 @@
 **/backup/
 **/restore/
 
+# *arr apps' own scheduled backup zips (we already take the live db)
+**/Backups/
+
 # n8n
 **/crash.journal
 **/.n8n/queue/
+
+# Emby (media-streaming/config/emby): keep config/, data/ (library db, users)
+# and plugins/. Artwork/nfo are re-fetched; transcoding-temp is the live
+# transcode buffer and can be gigabytes if someone is watching at 3am.
+config/emby/metadata/
+config/emby/transcoding-temp/
+
+# Jenkins (jenkins/data): keep config.xml, secrets, users/, nodes/ and the
+# job config.xml tree. Builds and workspaces are regenerable, plugins are
+# baked into the image from plugins.txt, war/ is the exploded WAR.
+**/builds/
+data/workspace/
+data/plugins/
+data/war/
+data/updates/
+data/fingerprints/
+data/caches/
+
+# Open WebUI (ai/open-webui): keep webui.db and uploads/. vector_db is the
+# ChromaDB index rebuilt from uploads/ when documents are re-processed.
+open-webui/vector_db/

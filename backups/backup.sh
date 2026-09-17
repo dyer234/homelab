@@ -36,7 +36,6 @@ run_backup() {
   tar_and_upload "ai" "/data/ai/open-webui" "/opt/backup/exclude-filters.txt"
   tar_and_upload "navidrome" "/data/navidrome/config" "/opt/backup/exclude-filters.txt"
   tar_and_upload "jenkins" "/data/jenkins/data" "/opt/backup/exclude-filters.txt"
-  tar_and_upload "gluetun-env" "/data/gluetun/.env"
 
   rm -rf "$STAGING"
 
@@ -44,6 +43,11 @@ run_backup() {
   # --b2-hard-delete: without it B2 only hides old versions, so they keep
   # costing storage until a lifecycle rule purges them.
   rclone delete "$REMOTE" --min-age "${RETENTION_DAYS}d" --b2-hard-delete --verbose
+
+  # Re-uploading a same-day archive (e.g. the run-on-startup after a restart)
+  # hides the previous version rather than replacing it, and hidden versions
+  # still count against storage. cleanup purges them.
+  rclone cleanup "$REMOTE" --verbose
 
   log "Backup complete"
 }

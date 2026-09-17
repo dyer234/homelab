@@ -21,5 +21,4 @@ services:
       - ../ai/open-webui:/data/ai/open-webui:ro
       - ../navidrome/config:/data/navidrome/config:ro
       - ../jenkins/data:/data/jenkins/data:ro
-      - ../gluetun/.env:/data/gluetun/.env:ro
     restart: unless-stopped
