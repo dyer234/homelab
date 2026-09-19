@@ -141,6 +141,7 @@ def main(argv):
         delete(argv[2])
         print(f"node {argv[2]}: deleted")
     elif cmd == "list":
+        print("Jenkins node list:")
         for row in list_nodes(argv[2] if len(argv) > 2 else None):
             print("%-24s %-8s %-5s %s" % row)
     else:

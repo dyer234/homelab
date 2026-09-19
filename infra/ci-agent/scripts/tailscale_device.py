@@ -145,6 +145,7 @@ def main(argv):
     if cmd == "delete" and len(argv) == 3:
         delete(argv[2])
     elif cmd == "list":
+        print("Tailscale device list:")
         for row in devices(token(), argv[2] if len(argv) > 2 else None):
             print("%-24s %-20s %s" % row)
     else:
