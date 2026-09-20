@@ -1,0 +1,39 @@
+# Live container logs in the browser: https://logs.<DOMAIN>. Dozzle reads the
+# Docker socket and streams every container's stdout/stderr, with search and
+# multi-container split view; nothing is stored, so there is no volume.
+# Like the Traefik dashboard, it is unauthenticated behind Traefik — anyone who
+# can reach the host can read the logs (and logs can leak tokens/URLs). Set
+# DOZZLE_AUTH_PROVIDER=simple + a users.yml if that ever changes.
+services:
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    environment:
+      - TZ=${TZ}
+      # Name shown in the UI's host picker instead of the container id.
+      - DOZZLE_HOSTNAME=${DOMAIN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dozzle.rule=Host(`logs.${DOMAIN}`)"
+      - "traefik.http.routers.dozzle.entrypoints=websecure"
+      - "traefik.http.services.dozzle.loadbalancer.server.port=8080"
+      - "homepage.group=Infrastructure"
+      - "homepage.name=Container Logs"
+      - "homepage.weight=10"
+      - "homepage.icon=dozzle.png"
+      - "homepage.href=https://logs.${DOMAIN}"
+      - "homepage.description=Live logs for every container"
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - traefik-public
+    restart: unless-stopped
+
+networks:
+  traefik-public:
+    external: true

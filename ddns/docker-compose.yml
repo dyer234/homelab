@@ -18,6 +18,7 @@ services:
     labels:
       - "homepage.group=Infrastructure"
       - "homepage.name=DDNS"
+      - "homepage.weight=40"
       - "homepage.icon=digital-ocean.png"
       - "homepage.href=https://cloud.digitalocean.com/networking/domains/${DOMAIN}"
       - "homepage.description=Keeps ${DOMAIN} A records on this host's public IP"

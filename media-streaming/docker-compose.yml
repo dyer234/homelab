@@ -169,7 +169,13 @@ services:
       # Opens 8181 on the Docker interfaces so Traefik and Sonarr can reach the
       # qBittorrent WebUI. Without it Sonarr fails with
       # "Download client failed to add torrent by url".
-      - FIREWALL_INPUT_PORTS=8181
+      - FIREWALL_INPUT_PORTS=8181,8888
+      # HTTP proxy on 8888 (Docker interfaces only, never published). Prowlarr
+      # uses it as an Indexer Proxy for sites the ISP blocks by SNI (Cloudflare-
+      # fronted trackers get a TCP reset right after the TLS Client Hello; the
+      # same request through the tunnel works). Settings > Indexers > Indexer
+      # Proxies in Prowlarr: HTTP, host gluetun, port 8888, tagged "vpn".
+      - HTTPPROXY=on
       - TZ=${TZ}
     ports:
       - "8181:8181/tcp"

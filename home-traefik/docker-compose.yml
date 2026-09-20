@@ -82,6 +82,7 @@ services:
     labels:
       - "homepage.group=Infrastructure"
       - "homepage.name=Let's Encrypt"
+      - "homepage.weight=30"
       - "homepage.icon=lets-encrypt.png"
       - "homepage.href=https://${DOMAIN}/traefik/dashboard/#/http/routers"
       - "homepage.description=Certificates held by Traefik"

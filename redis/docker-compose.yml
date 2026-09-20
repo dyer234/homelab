@@ -12,6 +12,7 @@ services:
       - "traefik.tcp.services.redis.loadbalancer.server.port=6379"
       - "homepage.group=Infrastructure"
       - "homepage.name=Redis"
+      - "homepage.weight=20"
       - "homepage.icon=redis.png"
       - "homepage.description=Key-value store"
     networks:
