@@ -1,0 +1,346 @@
+{
+  "base_url": "http://sonarr:8989/api/v3",
+  "auth_header": "X-Api-Key",
+  "api_key": {
+    "xml": "../media-streaming/config/sonarr/config.xml"
+  },
+  "tags": [
+    "media",
+    "sonarr"
+  ],
+  "tools": [
+    {
+      "name": "sonarr-series-lookup",
+      "description": "START HERE for any TV download request: 'download <show>', 'download <show> S02E05', 'get/grab the latest episode of <show>', 'download a torrent/file' for a series. Searches TheTVDB (via Sonarr) by name and reports inLibrary per match. Then: inLibrary=true -> sonarr-episodes to find the episode id -> sonarr-run-command EpisodeSearch (Sonarr picks a release matching the quality profile and sends it to qBittorrent), or sonarr-releases + sonarr-grab-release when the user named a specific release. inLibrary=false -> sonarr-quality-profiles + sonarr-root-folders -> sonarr-series-add with searchForMissingEpisodes. Not sure whether <x> is a show or a movie? Try radarr-movie-lookup too.",
+      "method": "GET",
+      "path": "/series/lookup",
+      "input": {
+        "term": {
+          "type": "string",
+          "description": "Series name to search for"
+        }
+      },
+      "required": [
+        "term"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {id, tvdbId, title, year, status, network, seasons: (.seasons|length), inLibrary: ((.id // 0) > 0), overview: (.overview // \"\" | .[0:200])}]"
+    },
+    {
+      "name": "sonarr-series-list",
+      "description": "Every series in the Sonarr library with per-season episode/file counts. Prefer sonarr-series-lookup or sonarr-series-get when you already know the series.",
+      "method": "GET",
+      "path": "/series",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, title, year, status, monitored, network, qualityProfileId, path, nextAiring, seasons: [.seasons[] | {seasonNumber, monitored, episodes: .statistics.episodeCount, files: .statistics.episodeFileCount}]}]"
+    },
+    {
+      "name": "sonarr-series-get",
+      "description": "One library series by its Sonarr id, including seasons, monitoring flags, quality profile and root folder.",
+      "method": "GET",
+      "path": "/series/{id}",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "Sonarr series id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "readOnly": true,
+      "filter": "{id, tvdbId, title, year, status, monitored, network, qualityProfileId, rootFolderPath, path, nextAiring, previousAiring, seasons: [.seasons[] | {seasonNumber, monitored, episodes: .statistics.episodeCount, files: .statistics.episodeFileCount, sizeOnDisk: .statistics.sizeOnDisk}]}"
+    },
+    {
+      "name": "sonarr-episodes",
+      "description": "Episodes of a series (optionally one season): ids, air dates, whether a file exists, monitored flag. Episode ids are what sonarr-run-command EpisodeSearch needs.",
+      "method": "GET",
+      "path": "/episode",
+      "input": {
+        "seriesId": {
+          "type": "integer",
+          "description": "Sonarr series id"
+        },
+        "seasonNumber": {
+          "type": "integer",
+          "description": "Restrict to one season"
+        }
+      },
+      "required": [
+        "seriesId"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {id, seasonNumber, episodeNumber, title, airDateUtc, hasFile, monitored, episodeFileId}]"
+    },
+    {
+      "name": "sonarr-wanted-missing",
+      "description": "Monitored episodes that have aired but have no file, newest first. Paged.",
+      "method": "GET",
+      "path": "/wanted/missing?sortKey=airDateUtc&sortDirection=descending&includeSeries=true",
+      "input": {
+        "page": {
+          "type": "integer",
+          "description": "1-based page",
+          "default": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "description": "Items per page",
+          "default": 20
+        }
+      },
+      "readOnly": true,
+      "filter": "{page, pageSize, totalRecords, records: [.records[] | {id, seriesId, series: .series.title, seasonNumber, episodeNumber, title, airDateUtc, monitored}]}"
+    },
+    {
+      "name": "sonarr-queue",
+      "description": "Current download queue with status, progress and problems. An item with trackedDownloadState=importPending plus statusMessages (e.g. 'Found executable file', 'Invalid video file', 'No files eligible for import') is STUCK: it downloaded but Sonarr refuses to import it. Each item has an id for sonarr-queue-remove. Two entries for the same episode means duplicate downloads: keep the one further along (or the one the user asked for) and sonarr-queue-remove the other with blocklist=false.",
+      "method": "GET",
+      "path": "/queue?includeSeries=true&includeEpisode=true",
+      "input": {
+        "pageSize": {
+          "type": "integer",
+          "default": 50
+        }
+      },
+      "readOnly": true,
+      "filter": "{totalRecords, records: [.records[] | {id, seriesId, series: .series.title, seasonNumber: .episode.seasonNumber, episodeNumber: .episode.episodeNumber, episodeId, title, status, trackedDownloadStatus, trackedDownloadState, size, sizeleft, timeleft, protocol, downloadClient, indexer, errorMessage, statusMessages: [.statusMessages[]? | .messages[]?]}]}"
+    },
+    {
+      "name": "sonarr-queue-remove",
+      "description": "Remove one queue item, and with removeFromClient=true also remove the torrent from qBittorrent; blocklist=true stops Sonarr grabbing that release again. Do this FIRST whenever a download is stuck, bad, an exe, won't import, or the user wants 'a better copy': remove with removeFromClient=true and blocklist=true, THEN search again (sonarr-run-command EpisodeSearch) or grab a DIFFERENT release via sonarr-releases + sonarr-grab-release. Skipping this step makes the next grab fail, because qBittorrent already has the torrent.",
+      "method": "DELETE",
+      "path": "/queue/{id}?removeFromClient={removeFromClient}&blocklist={blocklist}&skipRedownload=false",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "Queue item id from sonarr-queue"
+        },
+        "removeFromClient": {
+          "type": "boolean",
+          "description": "Also remove the torrent from qBittorrent",
+          "default": true
+        },
+        "blocklist": {
+          "type": "boolean",
+          "description": "Blocklist this release so it is not grabbed again",
+          "default": true
+        }
+      },
+      "required": [
+        "id",
+        "removeFromClient",
+        "blocklist"
+      ],
+      "destructive": true
+    },
+    {
+      "name": "sonarr-history",
+      "description": "Recent grab/import/removal/failure events, newest first. Useful for 'what happened to X' questions.",
+      "method": "GET",
+      "path": "/history?sortKey=date&sortDirection=descending&includeSeries=true&includeEpisode=true",
+      "input": {
+        "page": {
+          "type": "integer",
+          "default": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "default": 20
+        },
+        "seriesId": {
+          "type": "integer",
+          "description": "Restrict to one series"
+        }
+      },
+      "readOnly": true,
+      "filter": "{totalRecords, records: [.records[] | {id, date, eventType, seriesId, series: .series.title, seasonNumber: .episode.seasonNumber, episodeNumber: .episode.episodeNumber, sourceTitle, quality: .quality.quality.name, indexer: .data.indexer, downloadClient: .data.downloadClient, reason: .data.reason}]}"
+    },
+    {
+      "name": "sonarr-calendar",
+      "description": "Episodes airing in a date range (upcoming and recent), with whether each already has a file.",
+      "method": "GET",
+      "path": "/calendar?includeSeries=true",
+      "input": {
+        "start": {
+          "type": "string",
+          "description": "ISO date, e.g. 2026-09-21"
+        },
+        "end": {
+          "type": "string",
+          "description": "ISO date"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {id, seriesId, series: .series.title, seasonNumber, episodeNumber, title, airDateUtc, hasFile, monitored}]"
+    },
+    {
+      "name": "sonarr-run-command",
+      "description": "Trigger a Sonarr task; this is how 'download <episode>' is normally fulfilled once the episode id is known (EpisodeSearch): Sonarr searches the indexers, applies the quality profile and sends the best release to qBittorrent. name is one of: EpisodeSearch (episodeIds: [..]), SeriesSearch (seriesId), SeasonSearch (seriesId, seasonNumber), MissingEpisodeSearch (all missing), RefreshSeries (seriesId, optional), RssSync. Returns the queued command; poll sonarr-commands, then sonarr-queue to confirm a grab. If nothing was grabbed, sonarr-releases shows why. Check sonarr-queue first: if the episode is already downloading, a new search is pointless.",
+      "method": "POST",
+      "path": "/command",
+      "input": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "EpisodeSearch",
+            "SeriesSearch",
+            "SeasonSearch",
+            "MissingEpisodeSearch",
+            "RefreshSeries",
+            "RssSync"
+          ]
+        },
+        "episodeIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "seriesId": {
+          "type": "integer"
+        },
+        "seasonNumber": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "filter": "{id, name, status, queued, message}"
+    },
+    {
+      "name": "sonarr-releases",
+      "description": "Manual search: every release the indexers return for one episode, with Sonarr's verdict (approved) and rejection reasons (wrong quality for profile, too small, already in queue...). Use when the user asks to download a SPECIFIC release/torrent by name (e.g. 'download Lanterns S01E06 1080p WEB H264 CAKES'), or to see why an automatic search grabbed nothing. Match the wanted title, then pass its guid + indexerId to sonarr-grab-release. When replacing a bad download, never pick the release that is already in the queue (same title as the stuck item, or rejection 'already in queue'); pick a different release group. SIZE POLICY when choosing which release to grab: prefer 2-3 GB; if nothing suitable is in that range, up to 5 GB is fine; anything ABOVE 5 GB needs the user's explicit approval before grabbing - show the title and size and ask. Among candidates in range prefer more seeders and a well-known release group, and skip anything with rejections about executables or blocklist.",
+      "method": "GET",
+      "path": "/release",
+      "input": {
+        "episodeId": {
+          "type": "integer",
+          "description": "Episode id from sonarr-episodes or sonarr-wanted-missing"
+        }
+      },
+      "required": [
+        "episodeId"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {guid, indexerId, indexer, title, size, sizeGB: ((.size / 1073741824 * 10 | round) / 10), seeders, leechers, age, publishDate, protocol, quality: .quality.quality.name, customFormatScore, approved, rejections}]"
+    },
+    {
+      "name": "sonarr-grab-release",
+      "description": "Download one specific release from sonarr-releases, bypassing quality-profile rejections (not size/blocklist ones). Sends it to qBittorrent and tracks it in sonarr-queue. BEFORE calling: check sonarr-queue; if a healthy copy of this episode is already downloading (no statusMessages), do not start a second one unless the user explicitly wants it replaced, and then sonarr-queue-remove the old one first. A rejection reading 'Release in queue already meets cutoff' means exactly that: a good copy is already in the queue, so report it instead of grabbing. If the call fails with 'Download client failed to add torrent', that torrent is already in qBittorrent (usually the stuck one): sonarr-queue-remove it with removeFromClient=true, blocklist=true, then grab a DIFFERENT release. A normal (non-error) result means the grab succeeded, whatever the release's earlier approved/rejections flags said; confirm with sonarr-queue and tell the user what was grabbed. SIZE POLICY when choosing which release to grab: prefer 2-3 GB; if nothing suitable is in that range, up to 5 GB is fine; anything ABOVE 5 GB needs the user's explicit approval before grabbing - show the title and size and ask. Among candidates in range prefer more seeders and a well-known release group, and skip anything with rejections about executables or blocklist.",
+      "method": "POST",
+      "path": "/release",
+      "input": {
+        "guid": {
+          "type": "string",
+          "description": "guid from sonarr-releases"
+        },
+        "indexerId": {
+          "type": "integer",
+          "description": "indexerId from sonarr-releases"
+        }
+      },
+      "required": [
+        "guid",
+        "indexerId"
+      ],
+      "filter": "{grabbed: true, title, indexer, size, quality: .quality.quality.name}"
+    },
+    {
+      "name": "sonarr-commands",
+      "description": "Status of recently queued Sonarr commands (searches, refreshes): queued / started / completed / failed.",
+      "method": "GET",
+      "path": "/command",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, status, queued, started, ended, message}]"
+    },
+    {
+      "name": "sonarr-quality-profiles",
+      "description": "Quality profiles (id + name), needed for sonarr-series-add.",
+      "method": "GET",
+      "path": "/qualityprofile",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name}]"
+    },
+    {
+      "name": "sonarr-root-folders",
+      "description": "Root folders (path + free space), needed for sonarr-series-add.",
+      "method": "GET",
+      "path": "/rootfolder",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, path, freeSpace, accessible}]"
+    },
+    {
+      "name": "sonarr-series-add",
+      "description": "Add a series to the library and optionally start downloading. Use for 'download <show>' when sonarr-series-lookup says inLibrary=false. tvdbId/title from the lookup, qualityProfileId from sonarr-quality-profiles, rootFolderPath from sonarr-root-folders; set addOptions.searchForMissingEpisodes=true to start downloads immediately.",
+      "method": "POST",
+      "path": "/series",
+      "input": {
+        "tvdbId": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "qualityProfileId": {
+          "type": "integer"
+        },
+        "rootFolderPath": {
+          "type": "string"
+        },
+        "monitored": {
+          "type": "boolean",
+          "default": true
+        },
+        "seasonFolder": {
+          "type": "boolean",
+          "default": true
+        },
+        "addOptions": {
+          "type": "object",
+          "description": "e.g. {\"monitor\": \"all\", \"searchForMissingEpisodes\": true}. monitor: all | future | missing | existing | firstSeason | latestSeason | none",
+          "properties": {
+            "monitor": {
+              "type": "string"
+            },
+            "searchForMissingEpisodes": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "tvdbId",
+        "title",
+        "qualityProfileId",
+        "rootFolderPath"
+      ],
+      "filter": "{id, tvdbId, title, year, monitored, path, qualityProfileId}"
+    },
+    {
+      "name": "sonarr-health",
+      "description": "Sonarr health warnings/errors (indexer failures, download client unreachable, root folder missing...). Empty list = healthy.",
+      "method": "GET",
+      "path": "/health",
+      "input": {},
+      "readOnly": true
+    },
+    {
+      "name": "sonarr-system-status",
+      "description": "Sonarr version, uptime/start time, OS and paths.",
+      "method": "GET",
+      "path": "/system/status",
+      "input": {},
+      "readOnly": true
+    }
+  ]
+}

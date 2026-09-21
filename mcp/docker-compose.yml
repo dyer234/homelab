@@ -1,0 +1,140 @@
+# MCP aggregator: one endpoint for every tool an AI client should see.
+#
+#   contextforge  IBM ContextForge gateway + admin UI at https://mcp.<DOMAIN>.
+#                 Upstream MCP servers (HTTP) and REST APIs are registered in
+#                 the UI; "virtual servers" bundle a subset of their tools and
+#                 each gets its own /servers/<id>/mcp URL, so Claude Code,
+#                 Open WebUI and n8n can each be handed a different tool set.
+#                 Single instance: SQLite in ./data, in-memory session cache.
+#                 Postgres/Redis are only for multi-replica deployments.
+#   mcp-stdio     Most community MCP servers are stdio processes (uvx/npx),
+#                 which the gateway image deliberately cannot spawn. This
+#                 sidecar (sparfenyuk/mcp-proxy + uv) runs the ones listed in
+#                 stdio/servers.json and serves each as Streamable HTTP at
+#                 http://mcp-stdio:8096/servers/<name>/mcp on mcp_net, which
+#                 is the URL to register in the gateway. Add a server: edit
+#                 servers.json, `make restart`, register the new URL.
+#
+# Secrets (JWT signing key, encryption passphrase, admin password) come from
+# 1pass.env. Auth is off for API/MCP callers (AUTH_REQUIRED below); the admin
+# password only gates the web UI.
+services:
+  contextforge:
+    image: ghcr.io/ibm/mcp-context-forge:latest
+    container_name: contextforge
+    # Same uid as the ARR stack so ./data is owned by the host user, not the
+    # image's 10001. The app only writes /tmp and /data, so this is safe.
+    user: "${PUID}:${PGID}"
+    environment:
+      - TZ=${TZ}
+      - HOST=0.0.0.0
+      - PORT=4444
+      # Auto-sizing gives 2×cores workers (16 on the Mac), each a full copy
+      # of the app; a single-user gateway needs two.
+      - GUNICORN_WORKERS=2
+      - DATABASE_URL=sqlite:////data/mcp.db
+      - CACHE_TYPE=memory
+      # production = strict CORS (APP_DOMAIN only) and secure cookies; the
+      # UI is only ever reached through Traefik over https.
+      - ENVIRONMENT=production
+      - APP_DOMAIN=https://mcp.${DOMAIN}
+      - SECURE_COOKIES=true
+      - MCPGATEWAY_UI_ENABLED=true
+      - MCPGATEWAY_ADMIN_API_ENABLED=true
+      # Single user, LAN-only host: no bearer tokens on the API or on the
+      # /servers/<id>/mcp endpoints, and anonymous callers get admin context,
+      # so clients are configured with just a URL. The admin UI keeps its
+      # login page regardless (browser requests are redirected before the
+      # no-auth path); the password is only used there, so make the session
+      # last a day (TOKEN_EXPIRY is minutes, 1440 is the maximum).
+      - AUTH_REQUIRED=false
+      - ALLOW_UNAUTHENTICATED_ADMIN=true
+      - TOKEN_EXPIRY=1440
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AUTH_ENCRYPTION_SECRET=${AUTH_ENCRYPTION_SECRET}
+      - PLATFORM_ADMIN_EMAIL=${PLATFORM_ADMIN_EMAIL}
+      - PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASSWORD}
+      - PLATFORM_ADMIN_FULL_NAME=Daniel
+      # Not a credential: the "well-known default" the gateway compares user
+      # passwords against to force a change. Must merely pass the 12+ char
+      # strength check, so it lives here rather than in 1Password.
+      - DEFAULT_USER_PASSWORD=Not-A-Login-Sentinel-2026
+      # Every upstream lives on a Docker network (mcp-stdio, sonarr, ...),
+      # which the gateway's SSRF guard refuses by default. Cloud metadata
+      # ranges stay blocked regardless.
+      - SSRF_ALLOW_PRIVATE_NETWORKS=true
+      # The image's `cryptography` (>=47) statically links an OpenSSL whose
+      # ARM feature probe raises SIGILL under the Apple Silicon hypervisor
+      # (Docker Desktop, Colima, Podman) — the container restart-loops with
+      # exit 132. This skips the probe; it only costs OpenSSL its ARM
+      # crypto acceleration and is a no-op on x86. Harmless on the server.
+      - OPENSSL_armcap=0
+    volumes:
+      - ./data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.contextforge.rule=Host(`mcp.${DOMAIN}`)"
+      - "traefik.http.routers.contextforge.entrypoints=websecure"
+      - "traefik.http.services.contextforge.loadbalancer.server.port=4444"
+      - "homepage.group=AI"
+      - "homepage.name=MCP Gateway"
+      - "homepage.icon=mdi-hub"
+      - "homepage.href=https://mcp.${DOMAIN}/admin"
+      - "homepage.description=ContextForge tool aggregator"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; r=urllib.request.urlopen('http://localhost:4444/health', timeout=5); exit(0 if json.loads(r.read()).get('status')=='healthy' else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      - mcp-stdio
+    networks:
+      - traefik-public
+      - mcp_net
+      - media_net
+    restart: unless-stopped
+
+  mcp-stdio:
+    build: ./stdio
+    image: homelab/mcp-stdio
+    container_name: mcp-stdio
+    # --pass-environment: spawned servers inherit PATH/UV_* so uvx finds the
+    # system python instead of trying to download one.
+    command: >-
+      --pass-environment --host 0.0.0.0 --port 8096
+      --named-server-config /config/servers.json
+    environment:
+      - TZ=${TZ}
+      - UV_CACHE_DIR=/cache
+      # mcp-jenkins (servers.json). The token is the same admin API token
+      # tofu and Homepage use; the controller is reached on traefik-public.
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_USERNAME=${JENKINS_USERNAME}
+      - JENKINS_PASSWORD=${JENKINS_API_TOKEN}
+    volumes:
+      - ./stdio/servers.json:/config/servers.json:ro
+      # Disposable: uvx downloads each server's package on first spawn.
+      - uv-cache:/cache
+      # mcp-server-docker. The socket is root on the host, and --pass-
+      # environment means every server in this sidecar could reach it; only
+      # acceptable because the gateway is single-user and LAN-only.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - mcp_net
+      # For jenkins:8080 only; no traefik labels, so nothing is published.
+      - traefik-public
+    restart: unless-stopped
+
+volumes:
+  uv-cache:
+
+networks:
+  traefik-public:
+    external: true
+  # Gateway <-> stdio sidecar only; nothing here is reachable from Traefik.
+  mcp_net:
+  # Lets the gateway wrap the ARR/Emby/qBittorrent APIs by container name.
+  media_net:
+    external: true
+    name: media-streaming_media_net

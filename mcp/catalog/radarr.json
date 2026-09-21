@@ -1,0 +1,316 @@
+{
+  "base_url": "http://radarr:7878/api/v3",
+  "auth_header": "X-Api-Key",
+  "api_key": {
+    "xml": "../media-streaming/config/radarr/config.xml"
+  },
+  "tags": [
+    "media",
+    "radarr"
+  ],
+  "tools": [
+    {
+      "name": "radarr-movie-lookup",
+      "description": "START HERE for any movie download request: 'download <movie>', 'get <movie> (2024)', 'download a torrent/file' for a film. Searches TMDB (via Radarr) by name (or 'tmdb:123' / 'imdb:tt123') and reports inLibrary per match. Then: inLibrary=true -> radarr-run-command MoviesSearch with its id (Radarr picks a release matching the quality profile and sends it to qBittorrent), or radarr-releases + radarr-grab-release when the user named a specific release. inLibrary=false -> radarr-quality-profiles + radarr-root-folders -> radarr-movie-add with searchForMovie. Not sure whether <x> is a movie or a show? Try sonarr-series-lookup too.",
+      "method": "GET",
+      "path": "/movie/lookup",
+      "input": {
+        "term": {
+          "type": "string",
+          "description": "Movie title, optionally with year"
+        }
+      },
+      "required": [
+        "term"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {id, tmdbId, imdbId, title, year, status, runtime, hasFile, inLibrary: ((.id // 0) > 0), overview: (.overview // \"\" | .[0:200])}]"
+    },
+    {
+      "name": "radarr-movie-list",
+      "description": "Every movie in the Radarr library with file/quality info. Prefer radarr-movie-lookup or radarr-movie-get when you know the movie.",
+      "method": "GET",
+      "path": "/movie",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, title, year, monitored, hasFile, status, isAvailable, qualityProfileId, sizeOnDisk, path, added, quality: .movieFile.quality.quality.name}]"
+    },
+    {
+      "name": "radarr-movie-get",
+      "description": "One library movie by Radarr id: file, quality, monitored flag, availability, profile and root folder.",
+      "method": "GET",
+      "path": "/movie/{id}",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "Radarr movie id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "readOnly": true,
+      "filter": "{id, tmdbId, imdbId, title, year, monitored, hasFile, status, isAvailable, minimumAvailability, qualityProfileId, rootFolderPath, path, sizeOnDisk, movieFile: (.movieFile | if . then {relativePath, size, quality: .quality.quality.name, dateAdded} else null end)}"
+    },
+    {
+      "name": "radarr-wanted-missing",
+      "description": "Monitored movies that are released but have no file, paged.",
+      "method": "GET",
+      "path": "/wanted/missing?sortKey=digitalRelease&sortDirection=descending",
+      "input": {
+        "page": {
+          "type": "integer",
+          "default": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "default": 20
+        }
+      },
+      "readOnly": true,
+      "filter": "{page, pageSize, totalRecords, records: [.records[] | {id, title, year, status, isAvailable, inCinemas, digitalRelease, physicalRelease, monitored}]}"
+    },
+    {
+      "name": "radarr-queue",
+      "description": "Current download queue with status, progress and problems. An item with trackedDownloadState=importPending plus statusMessages (e.g. 'Found executable file', 'Invalid video file', 'No files eligible for import') is STUCK: it downloaded but Radarr refuses to import it. Each item has an id for radarr-queue-remove. Two entries for the same movie means duplicate downloads: keep the one further along (or the one the user asked for) and radarr-queue-remove the other with blocklist=false.",
+      "method": "GET",
+      "path": "/queue?includeMovie=true",
+      "input": {
+        "pageSize": {
+          "type": "integer",
+          "default": 50
+        }
+      },
+      "readOnly": true,
+      "filter": "{totalRecords, records: [.records[] | {id, movieId, movie: .movie.title, year: .movie.year, title, status, trackedDownloadStatus, trackedDownloadState, size, sizeleft, timeleft, protocol, downloadClient, indexer, errorMessage, statusMessages: [.statusMessages[]? | .messages[]?]}]}"
+    },
+    {
+      "name": "radarr-queue-remove",
+      "description": "Remove one queue item, and with removeFromClient=true also remove the torrent from qBittorrent; blocklist=true stops Radarr grabbing that release again. Do this FIRST whenever a download is stuck, bad, an exe, won't import, or the user wants 'a better copy': remove with removeFromClient=true and blocklist=true, THEN search again (radarr-run-command MoviesSearch) or grab a DIFFERENT release via radarr-releases + radarr-grab-release. Skipping this step makes the next grab fail, because qBittorrent already has the torrent.",
+      "method": "DELETE",
+      "path": "/queue/{id}?removeFromClient={removeFromClient}&blocklist={blocklist}&skipRedownload=false",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "Queue item id from radarr-queue"
+        },
+        "removeFromClient": {
+          "type": "boolean",
+          "default": true
+        },
+        "blocklist": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": [
+        "id",
+        "removeFromClient",
+        "blocklist"
+      ],
+      "destructive": true
+    },
+    {
+      "name": "radarr-history",
+      "description": "Recent grab/import/removal/failure events, newest first.",
+      "method": "GET",
+      "path": "/history?sortKey=date&sortDirection=descending&includeMovie=true",
+      "input": {
+        "page": {
+          "type": "integer",
+          "default": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "default": 20
+        },
+        "movieId": {
+          "type": "integer",
+          "description": "Restrict to one movie"
+        }
+      },
+      "readOnly": true,
+      "filter": "{totalRecords, records: [.records[] | {id, date, eventType, movieId, movie: .movie.title, sourceTitle, quality: .quality.quality.name, indexer: .data.indexer, downloadClient: .data.downloadClient, reason: .data.reason}]}"
+    },
+    {
+      "name": "radarr-calendar",
+      "description": "Movies with cinema/digital/physical release dates in a range.",
+      "method": "GET",
+      "path": "/calendar",
+      "input": {
+        "start": {
+          "type": "string",
+          "description": "ISO date"
+        },
+        "end": {
+          "type": "string",
+          "description": "ISO date"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {id, title, year, inCinemas, digitalRelease, physicalRelease, hasFile, monitored}]"
+    },
+    {
+      "name": "radarr-run-command",
+      "description": "Trigger a Radarr task; this is how 'download <movie>' is normally fulfilled once the movie id is known (MoviesSearch): Radarr searches the indexers, applies the quality profile and sends the best release to qBittorrent. name is one of: MoviesSearch (movieIds: [..]), MissingMoviesSearch (all missing), RefreshMovie (movieIds, optional), RssSync. Poll radarr-commands, then radarr-queue to confirm a grab. If nothing was grabbed, radarr-releases shows why. Check radarr-queue first: if the movie is already downloading, a new search is pointless.",
+      "method": "POST",
+      "path": "/command",
+      "input": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "MoviesSearch",
+            "MissingMoviesSearch",
+            "RefreshMovie",
+            "RssSync"
+          ]
+        },
+        "movieIds": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "filter": "{id, name, status, queued, message}"
+    },
+    {
+      "name": "radarr-releases",
+      "description": "Manual search: every release the indexers return for one movie, with Radarr's verdict (approved) and rejection reasons. Use when the user asks to download a SPECIFIC release/torrent by name, or to see why an automatic search grabbed nothing. Match the wanted title, then pass its guid + indexerId to radarr-grab-release. When replacing a bad download, never pick the release that is already in the queue (same title as the stuck item, or rejection 'already in queue'); pick a different release group. SIZE POLICY when choosing which release to grab: prefer 2-3 GB; if nothing suitable is in that range, up to 5 GB is fine; anything ABOVE 5 GB needs the user's explicit approval before grabbing - show the title and size and ask. Among candidates in range prefer more seeders and a well-known release group, and skip anything with rejections about executables or blocklist.",
+      "method": "GET",
+      "path": "/release",
+      "input": {
+        "movieId": {
+          "type": "integer",
+          "description": "Radarr movie id"
+        }
+      },
+      "required": [
+        "movieId"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {guid, indexerId, indexer, title, size, sizeGB: ((.size / 1073741824 * 10 | round) / 10), seeders, leechers, age, publishDate, protocol, quality: .quality.quality.name, customFormatScore, approved, rejections}]"
+    },
+    {
+      "name": "radarr-grab-release",
+      "description": "Download one specific release from radarr-releases, bypassing quality-profile rejections (not size/blocklist ones). Sends it to qBittorrent and tracks it in radarr-queue. BEFORE calling: check radarr-queue; if a healthy copy of this movie is already downloading (no statusMessages), do not start a second one unless the user explicitly wants it replaced, and then radarr-queue-remove the old one first. A rejection reading 'Release in queue already meets cutoff' means exactly that: a good copy is already in the queue, so report it instead of grabbing. If the call fails with 'Download client failed to add torrent', that torrent is already in qBittorrent (usually the stuck one): radarr-queue-remove it with removeFromClient=true, blocklist=true, then grab a DIFFERENT release. A normal (non-error) result means the grab succeeded, whatever the release's earlier approved/rejections flags said; confirm with radarr-queue and tell the user what was grabbed. SIZE POLICY when choosing which release to grab: prefer 2-3 GB; if nothing suitable is in that range, up to 5 GB is fine; anything ABOVE 5 GB needs the user's explicit approval before grabbing - show the title and size and ask. Among candidates in range prefer more seeders and a well-known release group, and skip anything with rejections about executables or blocklist.",
+      "method": "POST",
+      "path": "/release",
+      "input": {
+        "guid": {
+          "type": "string"
+        },
+        "indexerId": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "guid",
+        "indexerId"
+      ],
+      "filter": "{grabbed: true, title, indexer, size, quality: .quality.quality.name}"
+    },
+    {
+      "name": "radarr-commands",
+      "description": "Status of recently queued Radarr commands.",
+      "method": "GET",
+      "path": "/command",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, status, queued, started, ended, message}]"
+    },
+    {
+      "name": "radarr-quality-profiles",
+      "description": "Quality profiles (id + name), needed for radarr-movie-add.",
+      "method": "GET",
+      "path": "/qualityprofile",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name}]"
+    },
+    {
+      "name": "radarr-root-folders",
+      "description": "Root folders (path + free space), needed for radarr-movie-add.",
+      "method": "GET",
+      "path": "/rootfolder",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, path, freeSpace, accessible}]"
+    },
+    {
+      "name": "radarr-movie-add",
+      "description": "Add a movie to the library and optionally start downloading. Use for 'download <movie>' when radarr-movie-lookup says inLibrary=false. tmdbId/title/year from the lookup, qualityProfileId from radarr-quality-profiles, rootFolderPath from radarr-root-folders; set addOptions.searchForMovie=true to start the download immediately.",
+      "method": "POST",
+      "path": "/movie",
+      "input": {
+        "tmdbId": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "year": {
+          "type": "integer"
+        },
+        "qualityProfileId": {
+          "type": "integer"
+        },
+        "rootFolderPath": {
+          "type": "string"
+        },
+        "monitored": {
+          "type": "boolean",
+          "default": true
+        },
+        "minimumAvailability": {
+          "type": "string",
+          "enum": [
+            "announced",
+            "inCinemas",
+            "released"
+          ],
+          "default": "released"
+        },
+        "addOptions": {
+          "type": "object",
+          "properties": {
+            "searchForMovie": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      },
+      "required": [
+        "tmdbId",
+        "title",
+        "qualityProfileId",
+        "rootFolderPath"
+      ],
+      "filter": "{id, tmdbId, title, year, monitored, path, qualityProfileId}"
+    },
+    {
+      "name": "radarr-health",
+      "description": "Radarr health warnings/errors. Empty list = healthy.",
+      "method": "GET",
+      "path": "/health",
+      "input": {},
+      "readOnly": true
+    },
+    {
+      "name": "radarr-system-status",
+      "description": "Radarr version, start time, OS and paths.",
+      "method": "GET",
+      "path": "/system/status",
+      "input": {},
+      "readOnly": true
+    }
+  ]
+}

@@ -2,6 +2,13 @@ services:
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openwebui
+    environment:
+      - TZ=${TZ}
+      # Python `cryptography` >=47 (48 in this image) SIGILLs under the Apple
+      # Silicon hypervisor (Docker Desktop): restart loop, exit 132, no log.
+      # Skips OpenSSL's ARM feature probe; no-op on x86, harmless on Linux.
+      # Same fix as mcp/docker-compose.yml.
+      - OPENSSL_armcap=0
     volumes:
       - ./open-webui:/app/backend/data
     labels:

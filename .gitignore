@@ -7,6 +7,8 @@ homepage/config/kubernetes.yaml
 homepage/config/proxmox.yaml
 backups/rclone.conf
 n8n/data
+mcp/data/*
+!mcp/data/.gitkeep
 ai/open-webui
 ntavidrome/config
 jenkins/data
@@ -28,3 +30,4 @@ jenkins/stashed-users
 homelab.local.env
 home-traefik/scripts/__pycache__
 infra/ci-agent/scripts/__pycache__
+mcp/__pycache__

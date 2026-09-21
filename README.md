@@ -11,6 +11,7 @@ Docker-based homelab running media streaming services behind Traefik, with DNS m
 | [homepage](homepage/) | Dashboard for all services |
 | [backups](backups/) | Automated backups to Backblaze B2 |
 | [tailscale](tailscale/) | Tailnet subnet router putting the Docker network on the tailnet |
+| [mcp](mcp/) | ContextForge MCP gateway aggregating every tool behind one endpoint |
 | [infra](infra/) | DNS, tailnet policy and cloud CI agents via OpenTofu on DigitalOcean |
 
 ## Scripts

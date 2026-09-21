@@ -1,0 +1,77 @@
+{
+  "base_url": "http://prowlarr:9696/api/v1",
+  "auth_header": "X-Api-Key",
+  "api_key": {
+    "xml": "../media-streaming/config/prowlarr/config.xml"
+  },
+  "tags": [
+    "media",
+    "prowlarr"
+  ],
+  "tools": [
+    {
+      "name": "prowlarr-indexers",
+      "description": "Configured indexers: id, name, protocol, enabled flag, priority, capabilities.",
+      "method": "GET",
+      "path": "/indexer",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, protocol, enable, priority, privacy}]"
+    },
+    {
+      "name": "prowlarr-indexer-status",
+      "description": "Indexers currently disabled by failures: indexerId, most recent failure, and when Prowlarr will retry. Empty list = all indexers healthy.",
+      "method": "GET",
+      "path": "/indexerstatus",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {indexerId, disabledTill, initialFailure, mostRecentFailure}]"
+    },
+    {
+      "name": "prowlarr-search",
+      "description": "Search all enabled indexers for releases (what Sonarr/Radarr would see). Returns title, indexer, size, seeders, age, download URL. Use to check whether a release exists at all before blaming Sonarr/Radarr.",
+      "method": "GET",
+      "path": "/search?type=search&limit=50",
+      "input": {
+        "query": {
+          "type": "string",
+          "description": "Search terms, e.g. 'Severance S02E01 1080p'"
+        },
+        "categories": {
+          "type": "integer",
+          "description": "Newznab category, e.g. 5000 TV, 2000 Movies"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {title, indexer, size, seeders, leechers, age, publishDate, protocol, categories: [.categories[]?.name], infoUrl}]"
+    },
+    {
+      "name": "prowlarr-applications",
+      "description": "Apps Prowlarr syncs indexers to (Sonarr, Radarr...) and their sync level.",
+      "method": "GET",
+      "path": "/applications",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, implementation, syncLevel}]"
+    },
+    {
+      "name": "prowlarr-health",
+      "description": "Prowlarr health warnings/errors. Empty list = healthy.",
+      "method": "GET",
+      "path": "/health",
+      "input": {},
+      "readOnly": true
+    },
+    {
+      "name": "prowlarr-system-status",
+      "description": "Prowlarr version, start time and OS.",
+      "method": "GET",
+      "path": "/system/status",
+      "input": {},
+      "readOnly": true
+    }
+  ]
+}

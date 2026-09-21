@@ -1,0 +1,16 @@
+{
+  "base_url": "http://gluetun:8000/v1",
+  "tags": ["ops", "vpn", "gluetun"],
+  "tools": [
+    {
+      "name": "gluetun-public-ip",
+      "description": "Public IP, country, region and city of the VPN tunnel that qBittorrent's traffic exits through. Fails when the tunnel is down, which is itself the answer.",
+      "method": "GET", "path": "/publicip/ip", "input": {}, "readOnly": true
+    },
+    {
+      "name": "gluetun-vpn-status",
+      "description": "Whether the WireGuard tunnel is 'running' or 'stopped'.",
+      "method": "GET", "path": "/vpn/status", "input": {}, "readOnly": true
+    }
+  ]
+}

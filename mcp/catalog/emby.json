@@ -1,0 +1,94 @@
+{
+  "base_url": "http://emby:8096/emby",
+  "auth_header": "X-Emby-Token",
+  "api_key": {
+    "env": "EMBY_API_KEY"
+  },
+  "tags": [
+    "media",
+    "emby"
+  ],
+  "tools": [
+    {
+      "name": "emby-sessions",
+      "description": "Active Emby sessions: who is connected, on which device/client, and what they are playing right now (NowPlayingItem) with play state.",
+      "method": "GET",
+      "path": "/Sessions",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {UserName, Client, DeviceName, LastActivityDate, NowPlaying: (.NowPlayingItem | if . then {Name, Type, SeriesName, SeasonName, IndexNumber, RunTimeTicks} else null end), IsPaused: .PlayState.IsPaused, PositionTicks: .PlayState.PositionTicks}]"
+    },
+    {
+      "name": "emby-search",
+      "description": "Search the Emby library for movies, series or episodes by name. Returns Id, Name, Type, Year, and for episodes the SeriesName/season/episode.",
+      "method": "GET",
+      "path": "/Items?Recursive=true&IncludeItemTypes=Movie,Series,Episode&Fields=Overview,Path,DateCreated&Limit=25",
+      "input": {
+        "SearchTerm": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "SearchTerm"
+      ],
+      "readOnly": true,
+      "filter": "{TotalRecordCount, Items: [.Items[] | {Id, Name, Type, ProductionYear, SeriesName, ParentIndexNumber, IndexNumber, Path, DateCreated}]}"
+    },
+    {
+      "name": "emby-item",
+      "description": "Details of one library item by Emby Id: path, overview, media streams, dates, user data.",
+      "method": "GET",
+      "path": "/Items?Fields=Overview,Path,MediaStreams,DateCreated,Genres",
+      "input": {
+        "Ids": {
+          "type": "string",
+          "description": "Emby item Id"
+        }
+      },
+      "required": [
+        "Ids"
+      ],
+      "readOnly": true,
+      "filter": "{Items: [.Items[] | {Id, Name, Type, ProductionYear, Overview, Path, Genres, DateCreated, RunTimeTicks, MediaStreams: [.MediaStreams[]? | {Type, Codec, Language, DisplayTitle}]}]}"
+    },
+    {
+      "name": "emby-users",
+      "description": "Emby user accounts (Id + Name); user Ids are needed by emby-latest.",
+      "method": "GET",
+      "path": "/Users",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {Id, Name, LastActivityDate}]"
+    },
+    {
+      "name": "emby-latest",
+      "description": "Most recently added movies/episodes as seen by one user.",
+      "method": "GET",
+      "path": "/Users/{userId}/Items/Latest?IncludeItemTypes=Movie,Episode&Fields=DateCreated",
+      "input": {
+        "userId": {
+          "type": "string",
+          "description": "Emby user Id from emby-users"
+        },
+        "Limit": {
+          "type": "integer",
+          "default": 20
+        }
+      },
+      "required": [
+        "userId"
+      ],
+      "readOnly": true,
+      "filter": "[.[] | {Id, Name, Type, SeriesName, ProductionYear, DateCreated}]"
+    },
+    {
+      "name": "emby-system-info",
+      "description": "Emby server version, name, OS, and whether a newer version is available.",
+      "method": "GET",
+      "path": "/System/Info",
+      "input": {},
+      "readOnly": true,
+      "filter": "{ServerName, Version, HasUpdateAvailable, OperatingSystem, LocalAddress}"
+    }
+  ]
+}

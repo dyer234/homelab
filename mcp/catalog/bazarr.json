@@ -1,0 +1,146 @@
+{
+  "base_url": "http://bazarr:6767/api",
+  "auth_header": "X-API-KEY",
+  "api_key": {
+    "yaml_apikey": "../media-streaming/config/bazarr/config/config.yaml"
+  },
+  "tags": [
+    "media",
+    "bazarr",
+    "subtitles"
+  ],
+  "tools": [
+    {
+      "name": "bazarr-badges",
+      "description": "Counts at a glance: episodes and movies wanting subtitles, providers throttled, announcements. Start here for 'how are subtitles doing'.",
+      "method": "GET",
+      "path": "/badges",
+      "input": {},
+      "readOnly": true
+    },
+    {
+      "name": "bazarr-wanted-episodes",
+      "description": "Episodes still missing a subtitle in a wanted language, paged. sonarrSeriesId/sonarrEpisodeId link back to Sonarr.",
+      "method": "GET",
+      "path": "/episodes/wanted",
+      "input": {
+        "start": {
+          "type": "integer",
+          "description": "Offset",
+          "default": 0
+        },
+        "length": {
+          "type": "integer",
+          "description": "Page size",
+          "default": 25
+        }
+      },
+      "readOnly": true,
+      "filter": "{total, data: [.data[] | {sonarrSeriesId, sonarrEpisodeId, seriesTitle, episode_number, episodeTitle, missing: [.missing_subtitles[]? | .name]}]}"
+    },
+    {
+      "name": "bazarr-wanted-movies",
+      "description": "Movies still missing a subtitle in a wanted language, paged.",
+      "method": "GET",
+      "path": "/movies/wanted",
+      "input": {
+        "start": {
+          "type": "integer",
+          "default": 0
+        },
+        "length": {
+          "type": "integer",
+          "default": 25
+        }
+      },
+      "readOnly": true,
+      "filter": "{total, data: [.data[] | {radarrId, title, missing: [.missing_subtitles[]? | .name]}]}"
+    },
+    {
+      "name": "bazarr-providers",
+      "description": "Subtitle providers with throttle state and reason (e.g. OpenSubtitles daily quota exhausted) and when they will be retried.",
+      "method": "GET",
+      "path": "/providers",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {name, status, retry}]"
+    },
+    {
+      "name": "bazarr-history-episodes",
+      "description": "Recent subtitle downloads/upgrades/failures for episodes, newest first.",
+      "method": "GET",
+      "path": "/history/series",
+      "input": {
+        "start": {
+          "type": "integer",
+          "default": 0
+        },
+        "length": {
+          "type": "integer",
+          "default": 25
+        }
+      },
+      "readOnly": true,
+      "filter": "{total, data: [.data[] | {timestamp, action, seriesTitle, episode_number, language: .language.name, provider, description}]}"
+    },
+    {
+      "name": "bazarr-history-movies",
+      "description": "Recent subtitle downloads/upgrades/failures for movies, newest first.",
+      "method": "GET",
+      "path": "/history/movies",
+      "input": {
+        "start": {
+          "type": "integer",
+          "default": 0
+        },
+        "length": {
+          "type": "integer",
+          "default": 25
+        }
+      },
+      "readOnly": true,
+      "filter": "{total, data: [.data[] | {timestamp, action, title, language: .language.name, provider, description}]}"
+    },
+    {
+      "name": "bazarr-search-episode-subtitle",
+      "description": "Search providers and download the best subtitle for one episode in one language. Uses a provider quota. ids come from bazarr-wanted-episodes (sonarrSeriesId, sonarrEpisodeId).",
+      "method": "PATCH",
+      "path": "/episodes/subtitles?seriesid={seriesid}&episodeid={episodeid}&language={language}&forced=false&hi=false",
+      "input": {
+        "seriesid": {
+          "type": "integer",
+          "description": "Sonarr series id"
+        },
+        "episodeid": {
+          "type": "integer",
+          "description": "Sonarr episode id"
+        },
+        "language": {
+          "type": "string",
+          "description": "2-letter code, e.g. en or es"
+        }
+      },
+      "required": [
+        "seriesid",
+        "episodeid",
+        "language"
+      ]
+    },
+    {
+      "name": "bazarr-system-health",
+      "description": "Bazarr health issues. Empty list = healthy.",
+      "method": "GET",
+      "path": "/system/health",
+      "input": {},
+      "readOnly": true
+    },
+    {
+      "name": "bazarr-system-status",
+      "description": "Bazarr version, Sonarr/Radarr versions it sees, OS and uptime.",
+      "method": "GET",
+      "path": "/system/status",
+      "input": {},
+      "readOnly": true
+    }
+  ]
+}
