@@ -22,4 +22,5 @@ services:
       - ../navidrome/config:/data/navidrome/config:ro
       - ../jenkins/data:/data/jenkins/data:ro
       - ../mcp/data:/data/mcp/data:ro
+      - ../openclaw/state:/data/openclaw/state:ro
     restart: unless-stopped

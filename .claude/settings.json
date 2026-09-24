@@ -6,7 +6,15 @@
       "Bash(python3 -m json.tool)",
       "Bash(docker compose:*)",
       "WebFetch(domain:gethomepage.dev)",
-      "WebFetch(domain:docs.techdox.nz)"
+      "WebFetch(domain:docs.techdox.nz)",
+      "Bash(op run:*)"
+    ],
+    "deny": [
+      "Read(./**/terraform.tfvars)",
+      "Read(./**/*.tfvars)",
+      "Read(./**/.env)",
+      "Bash(op read:*)",
+      "Bash(op item get:*)"
     ]
   }
 }

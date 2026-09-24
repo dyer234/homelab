@@ -1,0 +1,23 @@
+{
+  "base_url": "http://n8n:5678/webhook",
+  "tags": ["automation", "n8n"],
+  "tools": [
+    {
+      "name": "track-download",
+      "description": "Hand a just-grabbed download to n8n, which watches it and messages the group itself when it finishes, gets stuck, or runs long. Call this immediately after a successful sonarr-grab-release, radarr-grab-release, or a search command that grabbed something, then END YOUR TURN and tell the user you will report back - do not poll the queue yourself. id must be the SONARR EPISODE ID (from sonarr-episodes or sonarr-wanted-missing) or the RADARR MOVIE ID, because that is what the app reports back when the import completes. chat is the group the request came from; pass it through from the conversation.",
+      "method": "POST",
+      "path": "/track-download",
+      "input": {
+        "app": {"type": "string", "enum": ["sonarr", "radarr"], "description": "Which app is downloading it"},
+        "id": {"type": "integer", "description": "Sonarr episode id, or Radarr movie id"},
+        "title": {"type": "string", "description": "Human label, e.g. 'Ted Lasso S04E08' or 'Dune Part Two'"},
+        "chat": {"type": "string", "description": "WhatsApp chat id to report back to (the group this was asked in)"},
+        "channel": {"type": "string", "description": "Messaging channel", "default": "whatsapp"},
+        "requestedBy": {"type": "string", "description": "Who asked, if known"},
+        "note": {"type": "string", "description": "Anything worth repeating back, e.g. the release name that was grabbed"}
+      },
+      "required": ["app", "id", "title", "chat"],
+      "filter": "{tracked, key}"
+    }
+  ]
+}

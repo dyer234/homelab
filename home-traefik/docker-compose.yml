@@ -66,7 +66,14 @@ services:
       - "traefik.http.routers.traefik-dashboard.middlewares=traefik-strip"
       - "traefik.http.middlewares.traefik-strip.stripprefix.prefixes=/traefik"
     networks:
-      - traefik-public
+      traefik-public:
+        # Pinned so openclaw/ can name this exact address in
+        # gateway.trustedProxies: a proxy CIDR wide enough to also cover the
+        # bridge gateway (${NET_PREFIX}.0.1, which is what every client looks
+        # like through Docker Desktop's NAT) makes the whole forwarded chain
+        # "proxy" and the Gateway rejects it (proxy_attribution_required).
+        # High in the /16 like jenkins, so Docker never hands it out.
+        ipv4_address: ${NET_PREFIX}.255.5
     restart: unless-stopped
 
   # Serves the certificate list (name + expiry) for the Let's Encrypt card on

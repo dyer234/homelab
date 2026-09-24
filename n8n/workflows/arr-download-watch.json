@@ -1,0 +1,809 @@
+{
+  "name": "arr download watch",
+  "meta": {
+    "description": "Tracks downloads the OpenClaw media agent starts and reports back to the WhatsApp group when they finish, break, or run long. No LLM is used: the agent's turn ends at the grab, and everything below is plumbing.\n\nThree entry points:\n  POST /webhook/track-download   from the OpenClaw media agent (an MCP REST tool) right after a grab\n  POST /webhook/arr-event        from Sonarr/Radarr Connect (onDownload, onUpgrade, onManualInteractionRequired)\n  every 20 min                   sweeps pending records and gives up on stale ones\n  daily at 18:00                 digest of imports nobody asked for (RSS grabs,\n                                 monitored sequels, upgrades), only if any landed\n\nState lives in redis under the n8n:openclaw:dl: namespace, keyed by <app>:<episode-or-movie id>, TTL 48h so nothing leaks."
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "track-in",
+      "name": "track-download (from OpenClaw)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        -200
+      ],
+      "webhookId": "b7a1f0c2-3d44-4f10-9a11-track0000001",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "track-download",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "track-key",
+      "name": "build record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "// One pending record per grabbed item. The id is whatever the *arr app\n// will send back in its webhook: episodeId for Sonarr, movieId for Radarr.\nconst b = $input.first().json.body ?? $input.first().json;\nconst app = String(b.app || 'sonarr').toLowerCase();\nconst id = String(b.id ?? '');\nif (!id) throw new Error('track-download: id is required');\nconst record = {\n  app,\n  id,\n  title: b.title ?? '',\n  chat: b.chat ?? '',\n  channel: b.channel ?? 'whatsapp',\n  requestedBy: b.requestedBy ?? '',\n  note: b.note ?? '',\n  startedAt: new Date().toISOString(),\n};\nreturn [{ json: { key: `n8n:openclaw:dl:${app}:${id}`, record, value: JSON.stringify(record) } }];"
+      }
+    },
+    {
+      "id": "track-store",
+      "name": "redis: store pending",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        -200
+      ],
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $json.key }}",
+        "value": "={{ $json.value }}",
+        "keyType": "string",
+        "expire": true,
+        "ttl": 172800
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "track-ok",
+      "name": "ack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { tracked: true, key: $('build record').first().json.key } }];"
+      }
+    },
+    {
+      "id": "arr-in",
+      "name": "arr-event (from Sonarr/Radarr)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -640,
+        60
+      ],
+      "webhookId": "b7a1f0c2-3d44-4f10-9a11-arrev0000001",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "arr-event",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "arr-parse",
+      "name": "parse arr event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        60
+      ],
+      "parameters": {
+        "jsCode": "// Sonarr and Radarr post the same envelope shape: eventType plus series/\n// episodes or movie. Reduce it to {app, id, kind, text} and let the next\n// nodes decide whether anyone was waiting for it.\nconst b = $input.first().json.body ?? $input.first().json;\nconst ev = String(b.eventType || '');\nconst isSonarr = Boolean(b.series || b.episodes);\nconst app = isSonarr ? 'sonarr' : 'radarr';\n\nlet id = '';\nlet label = '';\nif (isSonarr) {\n  const ep = (b.episodes && b.episodes[0]) || {};\n  id = String(ep.id ?? '');\n  const s = String(ep.seasonNumber ?? '').padStart(2, '0');\n  const e = String(ep.episodeNumber ?? '').padStart(2, '0');\n  label = `${b.series?.title ?? 'Unknown'} S${s}E${e}${ep.title ? ' - ' + ep.title : ''}`;\n} else {\n  id = String(b.movie?.id ?? '');\n  label = `${b.movie?.title ?? 'Unknown'}${b.movie?.year ? ' (' + b.movie.year + ')' : ''}`;\n}\n\n// Only these three change a pending record's fate. Test/Grab/others are\n// acknowledged and dropped.\nconst kind =\n  ev === 'Download' || ev === 'ImportComplete' ? 'done' :\n  ev === 'ManualInteractionRequired' ? 'blocked' :\n  'ignore';\n\nconst quality = b.episodeFile?.quality || b.movieFile?.quality || b.release?.quality || '';\nconst size = b.episodeFile?.size || b.movieFile?.size || b.release?.size || 0;\nconst sizeGb = size ? (size / 1073741824).toFixed(1) + ' GB' : '';\n\nreturn [{ json: { app, id, kind, eventType: ev, label, quality, sizeGb, key: `n8n:openclaw:dl:${app}:${id}` } }];"
+      }
+    },
+    {
+      "id": "arr-relevant",
+      "name": "done or blocked?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -200,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              },
+              "leftValue": "={{ $json.kind }}",
+              "rightValue": "ignore"
+            },
+            {
+              "id": "c2",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.id }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "arr-lookup",
+      "name": "redis: find pending",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        20,
+        0
+      ],
+      "parameters": {
+        "operation": "get",
+        "propertyName": "pending",
+        "key": "={{ $json.key }}",
+        "keyType": "string",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "arr-waiting",
+      "name": "was anyone waiting?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.pending }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "arr-compose",
+      "name": "compose reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        -60
+      ],
+      "parameters": {
+        "jsCode": "// Templated, not generated: no model call on this path.\nconst ev = $('parse arr event').first().json;\nconst raw = $input.first().json.pending;\n// The Redis node may hand back the stored JSON already parsed.\nconst rec = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});\nconst bits = [ev.quality, ev.sizeGb].filter(Boolean).join(', ');\n\nconst text = ev.kind === 'done'\n  ? `Downloaded: ${ev.label}${bits ? ' (' + bits + ')' : ''}. Ready to watch.`\n  : `Import blocked: ${ev.label}. The download finished but ${ev.app} will not import it (usually a bad release). Ask me to remove and blocklist it, then search again.`;\n\nreturn [{ json: { key: ev.key, channel: rec.channel || 'whatsapp', to: rec.chat, message: text } }];"
+      }
+    },
+    {
+      "id": "arr-send",
+      "name": "openclaw: send to group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        680,
+        -60
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://openclaw:18789/tools/invoke",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENCLAW_GATEWAY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'message', args: { action: 'send', channel: $json.channel, to: $json.to, message: $json.message } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "arr-clear",
+      "name": "redis: clear record",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        900,
+        -60
+      ],
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $('compose reply').first().json.key }}",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "arr-drop",
+      "name": "nobody waiting - drop",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        460,
+        120
+      ]
+    },
+    {
+      "id": "arr-ignore",
+      "name": "not a tracked event",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        20,
+        180
+      ]
+    },
+    {
+      "id": "sweep-cron",
+      "name": "every 20 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -640,
+        380
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 20
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sweep-keys",
+      "name": "redis: list pending",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        380
+      ],
+      "parameters": {
+        "operation": "keys",
+        "keyPattern": "n8n:openclaw:dl:*",
+        "getValues": true,
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "sweep-stale",
+      "name": "pick stale records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Nothing here calls Sonarr: completion and import-blocked both arrive as\n// webhooks, so the only case left is \"no event ever came\". Report once at\n// STALE_HOURS and close the record; the 48h TTL is the backstop.\nconst STALE_HOURS = Number($env.ARR_WATCH_STALE_HOURS || 6);\nconst out = [];\nfor (const item of $input.all()) {\n  for (const [key, raw] of Object.entries(item.json)) {\n    if (!key.startsWith('n8n:openclaw:dl:')) continue;\n    let rec;\n    try { rec = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { continue; }\n    if (!rec || !rec.startedAt || !rec.chat) continue;\n    const ageH = (Date.now() - Date.parse(rec.startedAt)) / 3600000;\n    if (ageH < STALE_HOURS) continue;\n    out.push({ json: {\n      key,\n      channel: rec.channel || 'whatsapp',\n      to: rec.chat,\n      message: `Still not finished after ${Math.floor(ageH)}h: ${rec.title || rec.app + ' ' + rec.id}. It may be stalled - ask me to check the queue.`,\n    }});\n  }\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "sweep-send",
+      "name": "openclaw: report stale",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        20,
+        380
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://openclaw:18789/tools/invoke",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENCLAW_GATEWAY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'message', args: { action: 'send', channel: $json.channel, to: $json.to, message: $json.message } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "sweep-clear",
+      "name": "redis: close record",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        240,
+        380
+      ],
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $('pick stale records').item.json.key }}",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "digest-log",
+      "name": "redis: log for digest",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        680,
+        160
+      ],
+      "parameters": {
+        "operation": "push",
+        "list": "n8n:openclaw:digest:items",
+        "tail": true,
+        "messageData": "={{ JSON.stringify({ app: $('parse arr event').first().json.app, kind: $('parse arr event').first().json.kind, label: $('parse arr event').first().json.label, quality: $('parse arr event').first().json.quality, sizeGb: $('parse arr event').first().json.sizeGb, at: $now.toISO() }) }}"
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "digest-cron",
+      "name": "daily at 18:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -640,
+        620
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 18,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "digest-read",
+      "name": "redis: read digest",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        620
+      ],
+      "parameters": {
+        "operation": "get",
+        "propertyName": "items",
+        "key": "n8n:openclaw:digest:items",
+        "keyType": "list",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "digest-any",
+      "name": "anything landed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -200,
+        620
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "d1",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ Array.isArray($json.items) ? $json.items.length : 0 }}",
+              "rightValue": 0
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "digest-compose",
+      "name": "compose digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        560
+      ],
+      "parameters": {
+        "jsCode": "// Untracked imports: things Sonarr/Radarr grabbed on their own (RSS, a\n// monitored sequel, an upgrade). One line each, templated - no model call.\nconst raw = $input.first().json.items || [];\nconst rows = raw.map(r => { try { return typeof r === 'string' ? JSON.parse(r) : r; } catch { return null; } }).filter(Boolean);\nif (!rows.length) return [];\n\nconst done = rows.filter(r => r.kind === 'done');\nconst blocked = rows.filter(r => r.kind === 'blocked');\nconst line = r => `- ${r.label}${r.quality || r.sizeGb ? ' (' + [r.quality, r.sizeGb].filter(Boolean).join(', ') + ')' : ''}`;\n\nconst parts = [];\nif (done.length) parts.push(`${done.length} new ${done.length === 1 ? 'thing' : 'things'} landed today:`, ...done.map(line));\nif (blocked.length) parts.push('', `${blocked.length} could not be imported:`, ...blocked.map(line));\n\nreturn [{ json: { channel: 'whatsapp', to: $env.DIGEST_CHAT, message: parts.join('\\n') } }];"
+      }
+    },
+    {
+      "id": "digest-send",
+      "name": "openclaw: send digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        240,
+        560
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://openclaw:18789/tools/invoke",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENCLAW_GATEWAY_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: 'message', args: { action: 'send', channel: $json.channel, to: $json.to, message: $json.message } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "digest-clear",
+      "name": "redis: clear digest",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [
+        460,
+        560
+      ],
+      "parameters": {
+        "operation": "delete",
+        "key": "n8n:openclaw:digest:items",
+        "options": {}
+      },
+      "credentials": {
+        "redis": {
+          "id": "REPLACE_WITH_REDIS_CREDENTIAL",
+          "name": "homelab redis"
+        }
+      }
+    },
+    {
+      "id": "digest-quiet",
+      "name": "nothing landed - quiet",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        20,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "track-download (from OpenClaw)": {
+      "main": [
+        [
+          {
+            "node": "build record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "build record": {
+      "main": [
+        [
+          {
+            "node": "redis: store pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis: store pending": {
+      "main": [
+        [
+          {
+            "node": "ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "arr-event (from Sonarr/Radarr)": {
+      "main": [
+        [
+          {
+            "node": "parse arr event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse arr event": {
+      "main": [
+        [
+          {
+            "node": "done or blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "done or blocked?": {
+      "main": [
+        [
+          {
+            "node": "redis: find pending",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "not a tracked event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis: find pending": {
+      "main": [
+        [
+          {
+            "node": "was anyone waiting?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "was anyone waiting?": {
+      "main": [
+        [
+          {
+            "node": "compose reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "nobody waiting - drop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compose reply": {
+      "main": [
+        [
+          {
+            "node": "openclaw: send to group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openclaw: send to group": {
+      "main": [
+        [
+          {
+            "node": "redis: clear record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "every 20 min": {
+      "main": [
+        [
+          {
+            "node": "redis: list pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis: list pending": {
+      "main": [
+        [
+          {
+            "node": "pick stale records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pick stale records": {
+      "main": [
+        [
+          {
+            "node": "openclaw: report stale",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openclaw: report stale": {
+      "main": [
+        [
+          {
+            "node": "redis: close record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "daily at 18:00": {
+      "main": [
+        [
+          {
+            "node": "redis: read digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "redis: read digest": {
+      "main": [
+        [
+          {
+            "node": "anything landed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "anything landed?": {
+      "main": [
+        [
+          {
+            "node": "compose digest",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "nothing landed - quiet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "compose digest": {
+      "main": [
+        [
+          {
+            "node": "openclaw: send digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "openclaw: send digest": {
+      "main": [
+        [
+          {
+            "node": "redis: clear digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "nobody waiting - drop": {
+      "main": [
+        [
+          {
+            "node": "redis: log for digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

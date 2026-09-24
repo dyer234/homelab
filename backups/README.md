@@ -63,3 +63,13 @@ bash backups/restore.sh
 ```
 
 This pulls data from B2 back into the local directories. It will prompt for confirmation before overwriting.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `make up` | Start (or recreate) the container. Run this after adding a new stack to the mount list, or the new path is not backed up. |
+| `make run` | Back up now, without waiting for the 03:00 cron. |
+| `make list` | List what is in the B2 bucket. |
+| `make restore` | Restore the newest backup over the local stacks (prompts first). |
+| `make logs` | Follow the backup log. |

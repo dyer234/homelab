@@ -1,0 +1,129 @@
+// Seed for state/openclaw.json (copied by `make init` only when absent).
+// After that OpenClaw owns the live file: `channels login`, `plugins install`
+// and the Control UI all write to it. To change something here later, edit
+// the live file the same way (`make cli ARGS="config set ..."`) and mirror the
+// change in this seed so a rebuilt state/ comes up the same.
+{
+  gateway: {
+    mode: "local",
+    bind: "lan",
+    // Shared-secret auth; the token itself is OPENCLAW_GATEWAY_TOKEN (1Password).
+    auth: { mode: "token" },
+    // Reached through Traefik at https://openclaw.<DOMAIN>; the Control UI
+    // refuses other origins. Traefik lives on traefik-public (172.2x.0.0/16).
+    controlUi: { allowedOrigins: ["https://openclaw.dyerwolf.xyz"] },
+    // Exactly Traefik's pinned address (home-traefik, ${NET_PREFIX}.255.5 --
+    // keep in step if NET_PREFIX changes). Must NOT be a range that also
+    // covers the bridge gateway 172.23.0.1: that is the forwarded client for
+    // everything arriving through Docker Desktop's NAT, and a fully trusted
+    // chain leaves no client to attribute (403 proxy_attribution_required).
+    trustedProxies: ["172.23.255.5"],
+  },
+
+  // Tool servers: the two ContextForge virtual servers (see ../mcp/catalog/
+  // servers.json). IDs are stable; no auth (AUTH_REQUIRED=false there).
+  mcp: {
+    servers: {
+      media: {
+        url: "http://contextforge:4444/servers/4e6a7b4cef9b5287a0b8e240c73630a5/mcp",
+        transport: "streamable-http",
+        enabled: true,
+        connectionTimeoutMs: 10000,
+        requestTimeoutMs: 120000,
+      },
+      ops: {
+        url: "http://contextforge:4444/servers/138080b6e251557987c907fce8ff441c/mcp",
+        transport: "streamable-http",
+        enabled: true,
+        connectionTimeoutMs: 10000,
+        requestTimeoutMs: 120000,
+      },
+    },
+  },
+
+  agents: {
+    // Required for multi-agent rosters; "media" below is the fallback agent.
+    ownership: "explicit",
+    defaults: {
+      // Cheap by default; per-agent overrides below beat this. Change live
+      // with `make cli ARGS="models set <id>"` or the Control UI, and mirror
+      // the result here. `make cli ARGS="models list"` shows the catalogue.
+      model: "openai/gpt-5.4-mini",
+      // "media" is the fallback agent when no binding matches (the old
+      // `default: true` marker): it owns system tasks, heartbeats, and the
+      // provider auth the other agent inherits.
+      systemAgent: { agentId: "media" },
+      authInheritance: { agentId: "media" },
+      heartbeat: { agentId: "media" },
+    },
+    entries: {
+      media: {
+        name: "Media Manager",
+        workspace: "~/.openclaw/workspace-media",
+        agentDir: "~/.openclaw/agents/media/agent",
+        tools: {
+          // Only its own MCP server; no shell/file/browser access.
+          deny: ["mcp:ops:*", "exec", "write", "edit", "browser"],
+        },
+      },
+      ops: {
+        name: "Ops",
+        // Reads container status and logs: nano is enough and costs less.
+        // Media keeps the mini default - it runs multi-step tool chains
+        // (lookup -> releases -> grab) that nano tends to fumble.
+        model: "openai/gpt-5.4-nano",
+        workspace: "~/.openclaw/workspace-ops",
+        agentDir: "~/.openclaw/agents/ops/agent",
+        tools: {
+          deny: ["mcp:media:*", "browser"],
+        },
+      },
+    },
+  },
+
+  // Routing. Two WhatsApp groups carry the traffic:
+  //   tv   -> media (Media Manager)
+  //   ops  -> ops
+  // `make groups` resolves both by name and writes these bindings plus
+  // channels.whatsapp.{dmPolicy,groupPolicy,groups} into the live config;
+  // copy the resulting JIDs back here so a rebuilt state/ comes up the same.
+  //
+  // Deliberately NO catch-all binding: the WhatsApp number is public, so a
+  // message from outside those two groups must not reach an agent. Group
+  // membership is the access control.
+  bindings: [
+    { agentId: "media", match: { channel: "whatsapp", peer: { kind: "group", id: "120363430627976443@g.us" } } },
+    { agentId: "ops", match: { channel: "whatsapp", peer: { kind: "group", id: "120363431666891789@g.us" } } },
+  ],
+
+  channels: {
+    whatsapp: {
+      // The number is public: no DMs at all, and only these two groups are
+      // admitted. Every member of an admitted group may talk to the bot
+      // (groupPolicy "open" skips the per-number allowlist) and the bot
+      // answers every message (requireMention false).
+      dmPolicy: "disabled",
+      allowFrom: [],
+      groupPolicy: "open",
+      groups: {
+        "120363430627976443@g.us": { requireMention: false }, // tv
+        "120363431666891789@g.us": { requireMention: false }, // ops
+      },
+    },
+  },
+
+  // Channels are connected by hand (`make cli ARGS="channels login"`), which
+  // writes channels.* and installs the plugin into state/. `make groups` then
+  // sets, for the two groups above:
+  //   groupPolicy: "open"   every member of an admitted group may talk to the
+  //                         bot, with no per-number allowlist
+  //   groups: { "<jid>": { requireMention: false } }
+  //                         listing a group is what admits it (no other group
+  //                         is accepted), and the bot answers every message
+  //                         instead of only @-mentions. Flip requireMention to
+  //                         true for a chattier group.
+  //   dmPolicy: "disabled"  the number is public: nobody can DM the bot, and
+  //                         no pairing code is offered. `DM_ALLOW="+34..."
+  //                         make groups` switches this to an allowlist of
+  //                         specific numbers instead.
+}

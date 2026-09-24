@@ -1,0 +1,91 @@
+# OpenClaw: personal AI assistant reachable over messaging channels (WhatsApp
+# first). Two agents, each wired to one of the ContextForge virtual servers
+# (mcp/): "media" (Sonarr/Radarr/Bazarr/Emby...) is the default and answers
+# WhatsApp DMs; "ops" (Docker/Jenkins, every non-media container) answers in
+# a WhatsApp group you bind in state/openclaw.json. Personas live in
+# workspaces/ (committed, edit in place); everything OpenClaw writes (config,
+# WhatsApp session, agent DBs, installed plugins) lives in state/ (gitignored,
+# backed up).
+#
+# Locked down: no Docker socket, no host network, every capability dropped,
+# no privilege escalation. The container can reach its own directories,
+# contextforge:4444 (its tools) and the internet - it cannot run anything on
+# the host. The media agent additionally has no exec/write/browser tools.
+#
+# First start: `make init` seeds state/openclaw.json from openclaw.json5,
+# `make up`, then `make whatsapp` to pair by QR (installs the WhatsApp plugin
+# on first use; it is not in the upstream image). Control UI:
+# https://openclaw.<DOMAIN>, paste OPENCLAW_GATEWAY_TOKEN from 1Password.
+#
+#   openclaw      the gateway (long-running)
+#   openclaw-cli  same image, shares the gateway's network namespace; only for
+#                 `docker compose run --rm openclaw-cli <cmd>` (see Makefile).
+#                 Never started by `make up` (compose profile).
+x-openclaw: &openclaw
+  image: ghcr.io/openclaw/openclaw:latest
+  environment: &openclaw-env
+    HOME: /home/node
+    OPENCLAW_HOME: /home/node
+    TERM: xterm-256color
+    # Pinned container-side paths (upstream compose does the same).
+    OPENCLAW_STATE_DIR: /home/node/.openclaw
+    OPENCLAW_CONFIG_PATH: /home/node/.openclaw/openclaw.json
+    OPENCLAW_CONFIG_DIR: /home/node/.openclaw
+    OPENCLAW_WORKSPACE_DIR: /home/node/.openclaw/workspace-media
+    OPENCLAW_GATEWAY_PORT: "18789"
+    OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    TZ: ${TZ}
+  volumes:
+    - ./state:/home/node/.openclaw
+    - ./workspaces/media:/home/node/.openclaw/workspace-media
+    - ./workspaces/ops:/home/node/.openclaw/workspace-ops
+    - ./auth-secrets:/home/node/.config/openclaw
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  init: true
+
+services:
+  openclaw:
+    <<: *openclaw
+    container_name: openclaw
+    command: ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.openclaw.rule=Host(`openclaw.${DOMAIN}`)"
+      - "traefik.http.routers.openclaw.entrypoints=websecure"
+      - "traefik.http.services.openclaw.loadbalancer.server.port=18789"
+      - "homepage.group=AI"
+      - "homepage.name=OpenClaw"
+      - "homepage.icon=mdi-robot-happy"
+      - "homepage.href=https://openclaw.${DOMAIN}"
+      - "homepage.description=WhatsApp assistant on the MCP gateway"
+    healthcheck:
+      test: ["CMD", "node", "dist/docker-healthcheck.js"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      # Traefik in, and contextforge:4444 (the MCP gateway) out.
+      - traefik-public
+    restart: unless-stopped
+
+  openclaw-cli:
+    <<: *openclaw
+    profiles: ["cli"]
+    network_mode: "service:openclaw"
+    environment:
+      <<: *openclaw-env
+      BROWSER: echo
+    stdin_open: true
+    tty: true
+    entrypoint: ["tini", "-s", "--", "node", "dist/index.js"]
+    depends_on:
+      - openclaw
+
+networks:
+  traefik-public:
+    external: true

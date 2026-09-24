@@ -1,14 +1,32 @@
 {
   "homelab": {
     "description": "Everything: media stack, ops tools, fetch and time. For Claude Code.",
-    "tools": ["*"]
+    "tools": [
+      "*"
+    ]
   },
   "media": {
-    "description": "Sonarr, Radarr, Prowlarr, Bazarr, Emby, VPN status, plus fetch/time. No container or CI access. For Open WebUI.",
-    "tools": ["sonarr-*", "radarr-*", "prowlarr-*", "bazarr-*", "emby-*", "gluetun-*", "fetch-*", "time-*"]
+    "description": "Sonarr, Radarr, Prowlarr, Bazarr, Emby, VPN status, the n8n download tracker, plus fetch/time. No container or CI access. For Open WebUI and the OpenClaw media agent.",
+    "tools": [
+      "sonarr-*",
+      "radarr-*",
+      "prowlarr-*",
+      "bazarr-*",
+      "emby-*",
+      "gluetun-*",
+      "fetch-*",
+      "time-*",
+      "track-download"
+    ]
   },
   "ops": {
     "description": "Docker, Jenkins, VPN status, fetch/time. No media library access. For n8n / automation.",
-    "tools": ["docker-*", "jenkins-*", "gluetun-*", "fetch-*", "time-*"]
+    "tools": [
+      "docker-*",
+      "jenkins-*",
+      "gluetun-*",
+      "fetch-*",
+      "time-*"
+    ]
   }
 }

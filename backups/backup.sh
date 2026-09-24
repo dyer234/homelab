@@ -37,6 +37,7 @@ run_backup() {
   tar_and_upload "navidrome" "/data/navidrome/config" "/opt/backup/exclude-filters.txt"
   tar_and_upload "jenkins" "/data/jenkins/data" "/opt/backup/exclude-filters.txt"
   tar_and_upload "mcp" "/data/mcp/data" "/opt/backup/exclude-filters.txt"
+  tar_and_upload "openclaw" "/data/openclaw/state" "/opt/backup/exclude-filters.txt"
 
   rm -rf "$STAGING"
 

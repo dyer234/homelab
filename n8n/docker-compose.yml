@@ -4,12 +4,28 @@ services:
     container_name: n8n
     environment:
       - TZ=${TZ}
+      # Schedule triggers use this, not TZ; unset, n8n runs crons in
+      # America/New_York.
+      - GENERIC_TIMEZONE=${TZ}
       - N8N_HOST=n8n.${DOMAIN}
       - N8N_PROTOCOL=https
       - WEBHOOK_URL=https://n8n.${DOMAIN}/
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # workflows/arr-download-watch.json calls the OpenClaw gateway to post
+      # into WhatsApp, and reads these from $env in expressions (hence the
+      # env-access flag - n8n blocks it by default).
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      # How long a tracked download may run with no *arr event before the
+      # watchdog reports it and closes the record.
+      - ARR_WATCH_STALE_HOURS=${ARR_WATCH_STALE_HOURS:-6}
+      # Where the 18:00 digest of unrequested imports goes (the tv group).
+      - DIGEST_CHAT=${DIGEST_CHAT}
     volumes:
       - ./data:/home/node/.n8n
+      # Committed workflow definitions; import them from the n8n UI
+      # (Workflows > Import from File). Read-only: n8n keeps its own copies.
+      - ./workflows:/opt/workflows:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"

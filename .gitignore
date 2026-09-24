@@ -9,6 +9,16 @@ backups/rclone.conf
 n8n/data
 mcp/data/*
 !mcp/data/.gitkeep
+openclaw/state/*
+!openclaw/state/.gitkeep
+openclaw/auth-secrets/*
+!openclaw/auth-secrets/.gitkeep
+# OpenClaw agent state. state/ and auth-secrets/ are its databases, WhatsApp
+# session and credentials; memory/ is what the agent writes into its own
+# workspace at run time (session corpus, dreams) and contains message
+# content. The hand-written personas beside it (AGENTS.md, SOUL.md...) stay
+# tracked.
+openclaw/workspaces/*/memory/
 ai/open-webui
 ntavidrome/config
 jenkins/data

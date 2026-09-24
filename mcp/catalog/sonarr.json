@@ -271,6 +271,281 @@
       "filter": "[.[] | {id, name}]"
     },
     {
+      "name": "sonarr-release-profiles",
+      "description": "List release profiles: per-profile required terms and ignored terms (a release whose TITLE contains an ignored term is rejected before it is sent to qBittorrent). Read-only, changes nothing. This is the simplest place to block a term such as .exe.",
+      "method": "GET",
+      "path": "/releaseprofile",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, enabled, required, ignored, indexerId, tags}]"
+    },
+    {
+      "name": "sonarr-release-profile-add",
+      "description": "Create a release profile. To block executables by title, pass ignored: [\".exe\"] with enabled true and indexerId 0 (all indexers). Terms are matched case-insensitively against the release title; prefix a term with /regex/ for a regular expression. Returns the created profile.",
+      "method": "POST",
+      "path": "/releaseprofile",
+      "input": {
+        "name": {
+          "type": "string",
+          "description": "Profile name, e.g. Block executables"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Title must contain at least one of these (leave empty for none)"
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Title must contain NONE of these, e.g. [\".exe\"]"
+        },
+        "indexerId": {
+          "type": "integer",
+          "description": "0 = applies to every indexer",
+          "default": 0
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Empty = all series"
+        }
+      },
+      "required": [
+        "name",
+        "ignored"
+      ],
+      "filter": "{id, name, enabled, required, ignored, indexerId}"
+    },
+    {
+      "name": "sonarr-release-profile-edit",
+      "description": "Replace one release profile by id. Send the WHOLE profile as it should end up: read it first with sonarr-release-profiles, add or remove terms, then send every field back (name, enabled, required, ignored, indexerId, tags). Use this to add .exe to an existing profile rather than making a second one.",
+      "method": "PUT",
+      "path": "/releaseprofile/{id}",
+      "input": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "indexerId": {
+          "type": "integer"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "enabled",
+        "required",
+        "ignored",
+        "indexerId"
+      ],
+      "filter": "{id, name, enabled, required, ignored, indexerId}"
+    },
+    {
+      "name": "sonarr-release-profile-remove",
+      "description": "Permanently remove a release profile by id. Destructive: confirm with the user first, and prefer sonarr-release-profile-edit when the goal is only to take one term out.",
+      "method": "DELETE",
+      "path": "/releaseprofile/{id}",
+      "input": {
+        "id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "destructive": true
+    },
+    {
+      "name": "sonarr-custom-formats",
+      "description": "List custom formats and the specifications inside each one (what a format matches). Read-only. Custom formats only change SCORING: a format scores points on a quality profile, and a release is refused when its total falls below that profile minFormatScore. See sonarr-quality-profile-scoring.",
+      "method": "GET",
+      "path": "/customformat",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {id, name, includeCustomFormatWhenRenaming, specifications: [.specifications[] | {name, implementation, negate, required, value: (.fields[]? | select(.name == \"value\") | .value)}]}]"
+    },
+    {
+      "name": "sonarr-custom-format-schema",
+      "description": "The specification types a custom format can use on this Sonarr, with the fields each one takes (ReleaseTitleSpecification, SizeSpecification, ReleaseGroupSpecification, ResolutionSpecification, SourceSpecification, LanguageSpecification, ReleaseTypeSpecification, IndexerFlagSpecification). Read-only. Check here before building a format.",
+      "method": "GET",
+      "path": "/customformat/schema",
+      "input": {},
+      "readOnly": true,
+      "filter": "[.[] | {implementation, implementationName, fields: [.fields[]? | {name, label, type}]}]"
+    },
+    {
+      "name": "sonarr-custom-format-add",
+      "description": "Create a custom format. specifications is a list; for a title match use implementation ReleaseTitleSpecification with fields [{name: value, value: <regex>}], e.g. value \"\\\\.exe\" to match a title containing .exe. Creating the format alone changes nothing: give it a negative score on each quality profile with sonarr-quality-profile-scoring-edit, and set that profile minFormatScore above the negative total so matching releases are refused.",
+      "method": "POST",
+      "path": "/customformat",
+      "input": {
+        "name": {
+          "type": "string"
+        },
+        "includeCustomFormatWhenRenaming": {
+          "type": "boolean",
+          "default": false
+        },
+        "specifications": {
+          "type": "array",
+          "description": "[{name, implementation, negate, required, fields: [{name: \"value\", value: \"...\"}]}]",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "specifications"
+      ],
+      "filter": "{id, name, specifications: [.specifications[] | {name, implementation, negate, required}]}"
+    },
+    {
+      "name": "sonarr-custom-format-edit",
+      "description": "Replace one custom format by id. Read it with sonarr-custom-formats first and send the whole object back (id, name, includeCustomFormatWhenRenaming, specifications).",
+      "method": "PUT",
+      "path": "/customformat/{id}",
+      "input": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "includeCustomFormatWhenRenaming": {
+          "type": "boolean"
+        },
+        "specifications": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "specifications"
+      ],
+      "filter": "{id, name, specifications: [.specifications[] | {name, implementation, negate, required}]}"
+    },
+    {
+      "name": "sonarr-custom-format-remove",
+      "description": "Permanently remove a custom format by id, and with it every score it carries on the quality profiles. Destructive: confirm with the user first.",
+      "method": "DELETE",
+      "path": "/customformat/{id}",
+      "input": {
+        "id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "destructive": true
+    },
+    {
+      "name": "sonarr-quality-profile-scoring",
+      "description": "Read one quality profile in full, including formatItems (the score each custom format carries here), minFormatScore (a release scoring below this is refused), cutoffFormatScore and minUpgradeFormatScore. Read-only. Everything here is needed to build the body for sonarr-quality-profile-scoring-edit.",
+      "method": "GET",
+      "path": "/qualityprofile/{id}",
+      "input": {
+        "id": {
+          "type": "integer",
+          "description": "Profile id from sonarr-quality-profiles"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "readOnly": true
+    },
+    {
+      "name": "sonarr-quality-profile-scoring-edit",
+      "description": "Replace one quality profile by id, which is how a custom format gets its score. Read the profile with sonarr-quality-profile-scoring, change only formatItems (set score to -10000 on the format to block) and minFormatScore (e.g. -100, so anything carrying the -10000 is refused), then send back EVERY field unchanged: name, upgradeAllowed, cutoff, items, minFormatScore, cutoffFormatScore, minUpgradeFormatScore, formatItems. Omitting items or cutoff will damage the profile, so never send a partial body.",
+      "method": "PUT",
+      "path": "/qualityprofile/{id}",
+      "input": {
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "upgradeAllowed": {
+          "type": "boolean"
+        },
+        "cutoff": {
+          "type": "integer"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "minFormatScore": {
+          "type": "integer"
+        },
+        "cutoffFormatScore": {
+          "type": "integer"
+        },
+        "minUpgradeFormatScore": {
+          "type": "integer"
+        },
+        "formatItems": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "[{format: <customFormatId>, name: <formatName>, score: <int>}]"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "upgradeAllowed",
+        "cutoff",
+        "items",
+        "minFormatScore",
+        "formatItems"
+      ],
+      "filter": "{id, name, minFormatScore, cutoffFormatScore, formatItems: [.formatItems[] | select(.score != 0) | {format, name, score}]}"
+    },
+    {
       "name": "sonarr-root-folders",
       "description": "Root folders (path + free space), needed for sonarr-series-add.",
       "method": "GET",
