@@ -1,6 +1,12 @@
 title: Homelab
 
 layout:
+  Recently Downloaded:
+    style: row
+    columns: 1
+  Coming Soon:
+    style: row
+    columns: 1
   AI:
     style: row
     columns: 1

@@ -33,7 +33,10 @@ workflow so it starts working if the node is fixed upstream.
 
 Replies are templated in Code nodes and posted through the OpenClaw gateway
 (`POST http://openclaw:18789/tools/invoke`, the `message` tool) using
-`OPENCLAW_GATEWAY_TOKEN` from the environment. Nothing here calls a model, and
+`OPENCLAW_GATEWAY_TOKEN` from the environment. Import messages go out as the
+show's poster with the text as caption: the public TVDB/TMDB URL from the
+webhook payload, fetched by OpenClaw (its SSRF guard refuses `sonarr:8989`).
+The 18:00 digest sends one poster per show. Nothing here calls a model, and
 the watchdog never calls Sonarr: completion *and* import-blocked both arrive
 as webhooks, so the only case left to time out is silence.
 

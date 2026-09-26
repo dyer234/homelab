@@ -101,7 +101,7 @@
         60
       ],
       "parameters": {
-        "jsCode": "// Sonarr and Radarr post the same envelope shape: eventType plus series/\n// episodes or movie. Reduce it to {app, id, kind, text} and let the next\n// nodes decide whether anyone was waiting for it.\nconst b = $input.first().json.body ?? $input.first().json;\nconst ev = String(b.eventType || '');\nconst isSonarr = Boolean(b.series || b.episodes);\nconst app = isSonarr ? 'sonarr' : 'radarr';\n\nlet id = '';\nlet label = '';\nif (isSonarr) {\n  const ep = (b.episodes && b.episodes[0]) || {};\n  id = String(ep.id ?? '');\n  const s = String(ep.seasonNumber ?? '').padStart(2, '0');\n  const e = String(ep.episodeNumber ?? '').padStart(2, '0');\n  label = `${b.series?.title ?? 'Unknown'} S${s}E${e}${ep.title ? ' - ' + ep.title : ''}`;\n} else {\n  id = String(b.movie?.id ?? '');\n  label = `${b.movie?.title ?? 'Unknown'}${b.movie?.year ? ' (' + b.movie.year + ')' : ''}`;\n}\n\n// Only these three change a pending record's fate. Test/Grab/others are\n// acknowledged and dropped.\nconst kind =\n  ev === 'Download' || ev === 'ImportComplete' ? 'done' :\n  ev === 'ManualInteractionRequired' ? 'blocked' :\n  'ignore';\n\nconst quality = b.episodeFile?.quality || b.movieFile?.quality || b.release?.quality || '';\nconst size = b.episodeFile?.size || b.movieFile?.size || b.release?.size || 0;\nconst sizeGb = size ? (size / 1073741824).toFixed(1) + ' GB' : '';\n\nreturn [{ json: { app, id, kind, eventType: ev, label, quality, sizeGb, key: `n8n:openclaw:dl:${app}:${id}` } }];"
+        "jsCode": "// Sonarr and Radarr post the same envelope shape: eventType plus series/\n// episodes or movie. Reduce it to {app, id, kind, text} and let the next\n// nodes decide whether anyone was waiting for it.\nconst b = $input.first().json.body ?? $input.first().json;\nconst ev = String(b.eventType || '');\nconst isSonarr = Boolean(b.series || b.episodes);\nconst app = isSonarr ? 'sonarr' : 'radarr';\n\nlet id = '';\nlet label = '';\nif (isSonarr) {\n  const ep = (b.episodes && b.episodes[0]) || {};\n  id = String(ep.id ?? '');\n  const s = String(ep.seasonNumber ?? '').padStart(2, '0');\n  const e = String(ep.episodeNumber ?? '').padStart(2, '0');\n  label = `${b.series?.title ?? 'Unknown'} S${s}E${e}${ep.title ? ' - ' + ep.title : ''}`;\n} else {\n  id = String(b.movie?.id ?? '');\n  label = `${b.movie?.title ?? 'Unknown'}${b.movie?.year ? ' (' + b.movie.year + ')' : ''}`;\n}\n\n// Poster: the public TVDB/TMDB URL from the payload. OpenClaw fetches it\n// itself, and its SSRF guard refuses internal hosts like sonarr:8989.\nconst images = (isSonarr ? b.series?.images : b.movie?.images) || [];\nconst poster = images.find(i => i.coverType === 'poster')?.remoteUrl || '';\nconst show = isSonarr ? (b.series?.title ?? 'Unknown') : label;\n\n// Only these three change a pending record's fate. Test/Grab/others are\n// acknowledged and dropped.\nconst kind =\n  ev === 'Download' || ev === 'ImportComplete' ? 'done' :\n  ev === 'ManualInteractionRequired' ? 'blocked' :\n  'ignore';\n\nconst quality = b.episodeFile?.quality || b.movieFile?.quality || b.release?.quality || '';\nconst size = b.episodeFile?.size || b.movieFile?.size || b.release?.size || 0;\nconst sizeGb = size ? (size / 1073741824).toFixed(1) + ' GB' : '';\n\nreturn [{ json: { app, id, kind, eventType: ev, label, show, poster, quality, sizeGb, key: `n8n:openclaw:dl:${app}:${id}` } }];"
       }
     },
     {
@@ -212,7 +212,7 @@
         -60
       ],
       "parameters": {
-        "jsCode": "// Templated, not generated: no model call on this path.\nconst ev = $('parse arr event').first().json;\nconst raw = $input.first().json.pending;\n// The Redis node may hand back the stored JSON already parsed.\nconst rec = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});\nconst bits = [ev.quality, ev.sizeGb].filter(Boolean).join(', ');\n\nconst text = ev.kind === 'done'\n  ? `Downloaded: ${ev.label}${bits ? ' (' + bits + ')' : ''}. Ready to watch.`\n  : `Import blocked: ${ev.label}. The download finished but ${ev.app} will not import it (usually a bad release). Ask me to remove and blocklist it, then search again.`;\n\nreturn [{ json: { key: ev.key, channel: rec.channel || 'whatsapp', to: rec.chat, message: text } }];"
+        "jsCode": "// Templated, not generated: no model call on this path.\nconst ev = $('parse arr event').first().json;\nconst raw = $input.first().json.pending;\n// The Redis node may hand back the stored JSON already parsed.\nconst rec = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});\nconst bits = [ev.quality, ev.sizeGb].filter(Boolean).join(', ');\n\nconst text = ev.kind === 'done'\n  ? `Downloaded: ${ev.label}${bits ? ' (' + bits + ')' : ''}. Ready to watch.`\n  : `Import blocked: ${ev.label}. The download finished but ${ev.app} will not import it (usually a bad release). Ask me to remove and blocklist it, then search again.`;\n\nreturn [{ json: { key: ev.key, channel: rec.channel || 'whatsapp', to: rec.chat, message: text, media: ev.poster } }];"
       }
     },
     {
@@ -238,7 +238,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ name: 'message', args: { action: 'send', channel: $json.channel, to: $json.to, message: $json.message } }) }}",
+        "jsonBody": "={{ JSON.stringify({ name: 'message', args: Object.assign({ action: 'send', channel: $json.channel, to: $json.to, message: $json.message }, $json.media ? { media: $json.media } : {}) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -403,7 +403,7 @@
         "operation": "push",
         "list": "n8n:openclaw:digest:items",
         "tail": true,
-        "messageData": "={{ JSON.stringify({ app: $('parse arr event').first().json.app, kind: $('parse arr event').first().json.kind, label: $('parse arr event').first().json.label, quality: $('parse arr event').first().json.quality, sizeGb: $('parse arr event').first().json.sizeGb, at: $now.toISO() }) }}"
+        "messageData": "={{ JSON.stringify({ app: $('parse arr event').first().json.app, kind: $('parse arr event').first().json.kind, label: $('parse arr event').first().json.label, show: $('parse arr event').first().json.show, poster: $('parse arr event').first().json.poster, quality: $('parse arr event').first().json.quality, sizeGb: $('parse arr event').first().json.sizeGb, at: $now.toISO() }) }}"
       },
       "credentials": {
         "redis": {
@@ -499,7 +499,7 @@
         560
       ],
       "parameters": {
-        "jsCode": "// Untracked imports: things Sonarr/Radarr grabbed on their own (RSS, a\n// monitored sequel, an upgrade). One line each, templated - no model call.\nconst raw = $input.first().json.items || [];\nconst rows = raw.map(r => { try { return typeof r === 'string' ? JSON.parse(r) : r; } catch { return null; } }).filter(Boolean);\nif (!rows.length) return [];\n\nconst done = rows.filter(r => r.kind === 'done');\nconst blocked = rows.filter(r => r.kind === 'blocked');\nconst line = r => `- ${r.label}${r.quality || r.sizeGb ? ' (' + [r.quality, r.sizeGb].filter(Boolean).join(', ') + ')' : ''}`;\n\nconst parts = [];\nif (done.length) parts.push(`${done.length} new ${done.length === 1 ? 'thing' : 'things'} landed today:`, ...done.map(line));\nif (blocked.length) parts.push('', `${blocked.length} could not be imported:`, ...blocked.map(line));\n\nreturn [{ json: { channel: 'whatsapp', to: $env.DIGEST_CHAT, message: parts.join('\\n') } }];"
+        "jsCode": "// Untracked imports: things Sonarr/Radarr grabbed on their own (RSS, a\n// monitored sequel, an upgrade). Templated - no model call. One message per\n// show or movie, sent as its poster with the episodes as the caption; the\n// headline rides on the first one. Blocked imports follow as plain text.\nconst raw = $input.first().json.items || [];\nconst rows = raw.map(r => { try { return typeof r === 'string' ? JSON.parse(r) : r; } catch { return null; } }).filter(Boolean);\nif (!rows.length) return [];\n\nconst done = rows.filter(r => r.kind === 'done');\nconst blocked = rows.filter(r => r.kind === 'blocked');\nconst bits = r => r.quality || r.sizeGb ? ' (' + [r.quality, r.sizeGb].filter(Boolean).join(', ') + ')' : '';\nconst line = r => `- ${r.label}${bits(r)}`;\n\n// Group by show so a binge is one poster, not eight. Rows logged before\n// posters existed have no show/poster and stand alone as text.\nconst groups = new Map();\nfor (const r of done) {\n  const show = r.show || r.label;\n  if (!groups.has(show)) groups.set(show, { poster: '', rows: [] });\n  const g = groups.get(show);\n  g.rows.push(r);\n  g.poster = g.poster || r.poster || '';\n}\n\nconst out = [];\nconst send = (message, media) => out.push({ json: { channel: 'whatsapp', to: $env.DIGEST_CHAT, message, media: media || '' } });\n\nlet headline = done.length ? `${done.length} new ${done.length === 1 ? 'thing' : 'things'} landed today:\\n\\n` : '';\nfor (const [show, g] of groups) {\n  // Episodes: show name once, then \"- S02E02 - Song 2 (...)\". Movies: one line.\n  const isShow = g.rows[0].app === 'sonarr' && g.rows[0].show;\n  const lines = g.rows.map(r => isShow && r.label.startsWith(show + ' ')\n    ? `- ${r.label.slice(show.length + 1)}${bits(r)}` : `${r.label}${bits(r)}`);\n  send(headline + (isShow ? show + '\\n' : '') + lines.join('\\n'), g.poster);\n  headline = '';\n}\nif (blocked.length) send([`${blocked.length} could not be imported:`, ...blocked.map(line)].join('\\n'));\n\nreturn out;"
       }
     },
     {
@@ -525,9 +525,15 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ name: 'message', args: { action: 'send', channel: $json.channel, to: $json.to, message: $json.message } }) }}",
+        "jsonBody": "={{ JSON.stringify({ name: 'message', args: Object.assign({ action: 'send', channel: $json.channel, to: $json.to, message: $json.message }, $json.media ? { media: $json.media } : {}) }) }}",
         "options": {
-          "timeout": 30000
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          }
         }
       }
     },
@@ -550,7 +556,8 @@
           "id": "REPLACE_WITH_REDIS_CREDENTIAL",
           "name": "homelab redis"
         }
-      }
+      },
+      "executeOnce": true
     },
     {
       "id": "digest-quiet",

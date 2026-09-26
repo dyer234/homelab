@@ -1,6 +1,9 @@
 services:
   wireguard:
-    image: ghcr.io/wg-easy/wg-easy:latest
+    # Pinned: v15 moved almost all config (WG_HOST, PASSWORD_HASH, DNS...) out
+    # of env vars into a setup wizard + database, so :latest would silently
+    # ignore everything below. Migrating: wg-easy.github.io/wg-easy docs.
+    image: ghcr.io/wg-easy/wg-easy:14
     container_name: wireguard-external
     environment:
       - LANG=en

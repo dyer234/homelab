@@ -30,3 +30,28 @@
           password: "{{HOMEPAGE_VAR_WGEASY_PASSWORD}}"
           threshold: 3
           fields: ["connected", "enabled", "total"]
+
+# Poster rows rendered by media-streaming's media-posters sidecar (Sonarr +
+# Radarr calendar / import history). customapi can't show images, so it's an
+# iframe; the browser loads it via Traefik, so src is the public hostname.
+# Coming Soon regenerates hourly; Recently Downloaded is built live on every
+# fetch. refreshInterval re-fetches them without a reload.
+- Coming Soon:
+    - Next 7 days:
+        icon: mdi-calendar-star
+        href: https://sonarr.{{HOMEPAGE_VAR_DOMAIN}}/calendar
+        widget:
+          type: iframe
+          name: coming-soon
+          src: https://posters.{{HOMEPAGE_VAR_DOMAIN}}/coming-soon.html
+          refreshInterval: 3600000
+
+- Recently Downloaded:
+    - Last 7 days:
+        icon: mdi-download-circle
+        href: https://emby.{{HOMEPAGE_VAR_DOMAIN}}
+        widget:
+          type: iframe
+          name: recently-downloaded
+          src: https://posters.{{HOMEPAGE_VAR_DOMAIN}}/recent.html
+          refreshInterval: 300000

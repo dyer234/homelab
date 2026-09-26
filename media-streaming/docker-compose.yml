@@ -5,6 +5,10 @@ networks:
   traefik-public:
     external: true
 
+volumes:
+  # Generated pages + cached posters for media-posters.
+  media-posters:
+
 services:
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
@@ -218,6 +222,35 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       # Only Homepage talks to it, and Homepage is on traefik-public.
+      - traefik-public
+    restart: unless-stopped
+
+  # Poster rows for the dashboard's "Coming Soon" / "Recently Downloaded"
+  # cards: Sonarr + Radarr calendar and import history rendered to static
+  # pages, embedded by Homepage's iframe widget (homepage/config/services.yaml).
+  # The browser loads the iframe, not Homepage, hence the Traefik route.
+  # API keys come from the apps' own config.xml (read-only mounts).
+  media-posters:
+    image: python:3.13-alpine
+    container_name: media-posters
+    command: ["python", "/app/media-posters.py"]
+    environment:
+      - TZ=${TZ}
+      - DOMAIN=${DOMAIN}
+      - EMBY_API_KEY=${EMBY_API_KEY}
+      - REFRESH_SECONDS=3600
+    volumes:
+      - ./scripts/media-posters.py:/app/media-posters.py:ro
+      - ./config/sonarr:/arr/sonarr:ro
+      - ./config/radarr:/arr/radarr:ro
+      - media-posters:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.media-posters.rule=Host(`posters.${DOMAIN}`)"
+      - "traefik.http.routers.media-posters.entrypoints=websecure"
+      - "traefik.http.services.media-posters.loadbalancer.server.port=8080"
+    networks:
+      - media_net
       - traefik-public
     restart: unless-stopped
 
