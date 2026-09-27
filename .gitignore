@@ -41,3 +41,5 @@ homelab.local.env
 home-traefik/scripts/__pycache__
 infra/ci-agent/scripts/__pycache__
 mcp/__pycache__
+*__pycache__
+openclaw/workspaces/media/DREAMS.md
